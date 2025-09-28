@@ -24,14 +24,14 @@ wss.on('connection', (ws_client) => {
     const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
     
     // --- CAMBIO CRÍTICO AQUÍ ---
-    // Le decimos a Deepgram que el audio es lineal de 16 bits, lo que fuerza la transcodificación.
-    // Esto es mucho más robusto que depender de la detección automática del formato del navegador.
+    // Eliminamos 'encoding' y 'sample_rate' que causaban problemas.
+    // Añadimos 'punctuate: true' para ayudar a Deepgram a procesar el texto.
     const connection = deepgram.listen.live({
         model: 'nova-2',
         language: 'es',
         smart_format: true,
-        encoding: 'linear16',
-        sample_rate: 16000
+        punctuate: true, // Ayuda a detectar pausas y finales de frases.
+        interim_results: true // Envía resultados más rápido.
     });
 
     connection.on('open', () => {
@@ -39,9 +39,13 @@ wss.on('connection', (ws_client) => {
     });
 
     connection.on('transcript', (data) => {
-        // AÑADIMOS ESTE LOG PARA CONFIRMAR EL VIAJE DE VUELTA
+        // Log para confirmar que recibimos la transcripción de vuelta.
         console.log("LOG: Transcripción recibida de Deepgram.");
         ws_client.send(JSON.stringify(data));
+    });
+    
+    connection.on('close', (event) => {
+        console.log("LOG: Conexión con Deepgram cerrada.", event);
     });
 
     connection.on('error', (e) => {
@@ -49,8 +53,9 @@ wss.on('connection', (ws_client) => {
     });
 
     ws_client.on('message', (message) => {
-        // console.log(`LOG: Recibido un paquete de audio del cliente. Tamaño: ${message.length} bytes.`);
-        if (connection.getReadyState() === 1) {
+        // Log para confirmar que el audio llega al servidor.
+        console.log(`LOG: Recibido paquete de audio del cliente. Tamaño: ${message.length} bytes.`);
+        if (connection.getReadyState() === 1) { // 1 = OPEN
             connection.send(message);
         }
     });
