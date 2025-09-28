@@ -105,7 +105,10 @@
     </div>
     <div id="floating-transcript"></div>
 
-    <script>
+  
+  
+  
+    // <script>
     // Variables globales para controlar el estado
     let isListening = false;
     let mediaRecorder;
@@ -165,7 +168,6 @@
         const micButton = document.getElementById('micButton');
         const floatingTranscript = document.getElementById('floating-transcript');
         
-        // Lógica del diccionario (sin cambios)
         customCommands = loadCustomCommands(); updateFullDictionary(); renderDictionary();
         const toggleBtn = document.getElementById('toggle-dictionary'); const dictContent = document.getElementById('dictionary-content');
         const addForm = document.getElementById('add-command-form'); const voiceInput = document.getElementById('voice-command');
@@ -203,24 +205,33 @@
             } else { alert('Por favor, selecciona un archivo .json válido.'); }
         };
 
-        // --- LÓGICA DE CONEXIÓN RESTAURADA Y ACTUALIZADA ---
-
         const startListening = () => {
-            // --- ¡ESTA ES LA LÍNEA CRÍTICA QUE HEMOS CAMBIADO! ---
-            // Apunta directamente a tu nuevo servidor en Render.
+            console.log('[CLIENT] startListening called.');
             const url = 'wss://dictado-deepgram.onrender.com';
             socket = new WebSocket(url);
 
             socket.onopen = () => {
-                console.log('Socket conectado. Pidiendo acceso al micrófono.');
+                console.log('[CLIENT] WebSocket connection opened.');
                 navigator.mediaDevices.getUserMedia({ audio: true })
                     .then(stream => {
+                        console.log('[CLIENT] getUserMedia successful. Stream obtained.');
                         mediaRecorder = new MediaRecorder(stream);
+                        
+                        mediaRecorder.onstart = () => {
+                            console.log('[CLIENT] MediaRecorder started.');
+                        };
+
                         mediaRecorder.ondataavailable = event => {
                             if (event.data.size > 0 && socket.readyState === 1) {
+                                console.log(`[CLIENT] ondataavailable fired. Sending ${event.data.size} bytes of audio.`);
                                 socket.send(event.data);
                             }
                         };
+                        
+                        mediaRecorder.onerror = (event) => {
+                            console.error('[CLIENT] MediaRecorder error:', event.error);
+                        };
+
                         mediaRecorder.start(250);
                         
                         isListening = true;
@@ -228,8 +239,9 @@
                         status.classList.replace('status-ready', 'status-listening');
                         micButton.classList.add('blinking');
                         floatingTranscript.classList.add('visible');
+
                     }).catch(err => {
-                        console.error("Error al obtener el micrófono:", err);
+                        console.error("[CLIENT] Error in getUserMedia:", err);
                         status.textContent = `Error: Micrófono`;
                         stopListening();
                     });
@@ -237,41 +249,42 @@
 
             socket.onmessage = message => {
                 const data = JSON.parse(message.data);
+                console.log('[CLIENT] Transcript received from server:', data);
                 const transcript = data.channel?.alternatives[0]?.transcript;
                 
                 if (transcript) {
                     if (data.is_final && data.speech_final) {
                         floatingTranscript.textContent = '';
                         const processedText = processTranscript(transcript);
-                        if (processedText === '#undo') {
-                           tinymce.activeEditor.execCommand('Undo');
-                        } else if (processedText === '#redo') {
-                           tinymce.activeEditor.execCommand('Redo');
-                        } else {
-                           insertTextWithSmartSpacing(processedText);
-                        }
+                        if (processedText === '#undo') { tinymce.activeEditor.execCommand('Undo'); } 
+                        else if (processedText === '#redo') { tinymce.activeEditor.execCommand('Redo'); }
+                        else { insertTextWithSmartSpacing(processedText); }
                     } else {
                         floatingTranscript.textContent = transcript;
                     }
                 }
             };
 
-            socket.onclose = () => {
-                stopListening();
+            socket.onclose = (event) => {
+                console.log('[CLIENT] WebSocket connection closed.', event);
+                stopListening(false); // Pasamos 'false' para evitar cerrar el socket de nuevo.
             };
 
             socket.onerror = (error) => {
-                console.error('Error de WebSocket:', error);
+                console.error('[CLIENT] WebSocket error event:', error);
                 status.textContent = 'Error Conexión';
                 stopListening();
             };
         };
 
-        const stopListening = () => {
+        const stopListening = (shouldCloseSocket = true) => {
+            console.log(`[CLIENT] stopListening called. shouldCloseSocket=${shouldCloseSocket}`);
             if (mediaRecorder && mediaRecorder.state === 'recording') {
+                console.log('[CLIENT] Stopping MediaRecorder.');
                 mediaRecorder.stop();
             }
-            if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+            if (socket && shouldCloseSocket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+                console.log('[CLIENT] Closing WebSocket.');
                 socket.close();
             }
             isListening = false;
@@ -282,7 +295,6 @@
             floatingTranscript.textContent = '';
         };
 
-        // Funciones de procesamiento de texto (sin cambios)
         function insertTextWithSmartSpacing(text) {
             const editor = tinymce.activeEditor; const rng = editor.selection.getRng();
             let textToInsert = text;
@@ -304,25 +316,20 @@
             const textBefore = rng.startContainer.textContent.substring(0, rng.startOffset);
             const trimmedTextBefore = textBefore.trim(); const lastSignificantChar = trimmedTextBefore.slice(-1);
             let processedText = text.trim().toLowerCase();
-
             const commandKeys = Object.keys(fullCommandDictionary).sort((a, b) => b.length - a.length);
             for(const command of commandKeys){
                  const regex = new RegExp(`\\b${command}\\b`, 'gi');
                  processedText = processedText.replace(regex, fullCommandDictionary[command]);
             }
-            
             if (processedText === '#undo' || processedText === '#redo') return processedText;
-            
             if (!trimmedTextBefore || ['.', '?', '!'].includes(lastSignificantChar)) {
                 if(processedText) processedText = processedText.charAt(0).toUpperCase() + processedText.slice(1);
             }
-
             processedText = processedText.replace(/([.?!]\s+)(\w)/g, (match, p1, p2) => p1 + p2.toUpperCase());
             processedText = processedText.replace(/\s\s+/g, ' ').trim();
             return processedText;
         }
 
-        // Función de control principal
         toggleListening = () => {
             if (isListening) {
                 stopListening();
@@ -337,6 +344,9 @@
             }
         });
     });
-    </script>
+    // </script>
+
+
+
 </body>
 </html>
