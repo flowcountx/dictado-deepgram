@@ -105,17 +105,14 @@
     </div>
     <div id="floating-transcript"></div>
 
-  
-  
-  
-    // <script>
+    <script>
     // Variables globales para controlar el estado
     let isListening = false;
     let mediaRecorder;
     let socket;
-    let toggleListening; // La definiremos después
+    let toggleListening;
 
-    // Lógica del diccionario (sin cambios)
+    // Lógica del diccionario
     const defaultCommandDictionary = {
         'punto': '. ', 'coma': ', ', 'dos puntos': ': ', 'punto y coma': '; ', 'signo de exclamación': '! ',
         'signo de exclamación invertido': '¡', 'signo de interrogación': '? ', 'signo de interrogación invertido': '¿',
@@ -206,32 +203,18 @@
         };
 
         const startListening = () => {
-            console.log('[CLIENT] startListening called.');
             const url = 'wss://dictado-deepgram.onrender.com';
             socket = new WebSocket(url);
 
             socket.onopen = () => {
-                console.log('[CLIENT] WebSocket connection opened.');
                 navigator.mediaDevices.getUserMedia({ audio: true })
                     .then(stream => {
-                        console.log('[CLIENT] getUserMedia successful. Stream obtained.');
                         mediaRecorder = new MediaRecorder(stream);
-                        
-                        mediaRecorder.onstart = () => {
-                            console.log('[CLIENT] MediaRecorder started.');
-                        };
-
                         mediaRecorder.ondataavailable = event => {
                             if (event.data.size > 0 && socket.readyState === 1) {
-                                console.log(`[CLIENT] ondataavailable fired. Sending ${event.data.size} bytes of audio.`);
                                 socket.send(event.data);
                             }
                         };
-                        
-                        mediaRecorder.onerror = (event) => {
-                            console.error('[CLIENT] MediaRecorder error:', event.error);
-                        };
-
                         mediaRecorder.start(250);
                         
                         isListening = true;
@@ -239,9 +222,8 @@
                         status.classList.replace('status-ready', 'status-listening');
                         micButton.classList.add('blinking');
                         floatingTranscript.classList.add('visible');
-
                     }).catch(err => {
-                        console.error("[CLIENT] Error in getUserMedia:", err);
+                        console.error("Error al obtener el micrófono:", err);
                         status.textContent = `Error: Micrófono`;
                         stopListening();
                     });
@@ -249,7 +231,6 @@
 
             socket.onmessage = message => {
                 const data = JSON.parse(message.data);
-                console.log('[CLIENT] Transcript received from server:', data);
                 const transcript = data.channel?.alternatives[0]?.transcript;
                 
                 if (transcript) {
@@ -266,25 +247,21 @@
             };
 
             socket.onclose = (event) => {
-                console.log('[CLIENT] WebSocket connection closed.', event);
-                stopListening(false); // Pasamos 'false' para evitar cerrar el socket de nuevo.
+                stopListening(false);
             };
 
             socket.onerror = (error) => {
-                console.error('[CLIENT] WebSocket error event:', error);
+                console.error('Error de WebSocket:', error);
                 status.textContent = 'Error Conexión';
                 stopListening();
             };
         };
 
         const stopListening = (shouldCloseSocket = true) => {
-            console.log(`[CLIENT] stopListening called. shouldCloseSocket=${shouldCloseSocket}`);
             if (mediaRecorder && mediaRecorder.state === 'recording') {
-                console.log('[CLIENT] Stopping MediaRecorder.');
                 mediaRecorder.stop();
             }
             if (socket && shouldCloseSocket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
-                console.log('[CLIENT] Closing WebSocket.');
                 socket.close();
             }
             isListening = false;
@@ -344,9 +321,6 @@
             }
         });
     });
-    // </script>
-
-
-
+    </script>
 </body>
 </html>
