@@ -9,7 +9,7 @@ const WebSocket = require('ws');
 // 2. Definir la función principal que se ejecutará en Vercel
 // Vercel está diseñado para ejecutar funciones como esta. Cuando una petición llegue
 // a tu aplicación, Vercel ejecutará este código.
-export default function handler(req, res) {
+module.exports = (req, res) => {
   
   // 3. Crear un "servidor de espera" para WebSockets.
   // Imagina que abrimos una sala de chat y esperamos a que los navegadores (clientes) se conecten.
