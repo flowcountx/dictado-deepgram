@@ -21,15 +21,26 @@ const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (ws_client) => {
     console.log("LOG: ¡Cliente conectado al servidor WebSocket!");
-
     const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
-    const connection = deepgram.listen.live({ model: 'nova-2', language: 'es', smart_format: true });
+    
+    // --- CAMBIO CRÍTICO AQUÍ ---
+    // Le decimos a Deepgram que el audio es lineal de 16 bits, lo que fuerza la transcodificación.
+    // Esto es mucho más robusto que depender de la detección automática del formato del navegador.
+    const connection = deepgram.listen.live({
+        model: 'nova-2',
+        language: 'es',
+        smart_format: true,
+        encoding: 'linear16',
+        sample_rate: 16000
+    });
 
     connection.on('open', () => {
         console.log("LOG: Conexión con Deepgram abierta y lista para recibir audio.");
     });
 
     connection.on('transcript', (data) => {
+        // AÑADIMOS ESTE LOG PARA CONFIRMAR EL VIAJE DE VUELTA
+        console.log("LOG: Transcripción recibida de Deepgram.");
         ws_client.send(JSON.stringify(data));
     });
 
@@ -38,8 +49,7 @@ wss.on('connection', (ws_client) => {
     });
 
     ws_client.on('message', (message) => {
-        // ESTE ES EL LOG MÁS IMPORTANTE. AHORA DEBERÍAMOS VERLO.
-        console.log(`LOG: Recibido un paquete de audio del cliente. Tamaño: ${message.length} bytes.`);
+        // console.log(`LOG: Recibido un paquete de audio del cliente. Tamaño: ${message.length} bytes.`);
         if (connection.getReadyState() === 1) {
             connection.send(message);
         }
