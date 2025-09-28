@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dictado por Voz - Deepgram</title>
+    <title>Dictado por Voz - Diagnóstico</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23dcdcdc' d='M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z'%3E%3C/path%3E%3C/svg%3E">
     <script src="https://cdn.tiny.cloud/1/8m4azy39b6j8rucm42gn657dkqz12lszz8hr1yb9h5j5rzzq/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
     <style>
@@ -65,28 +65,15 @@
         #toggle-dictionary svg { width: 24px; height: 24px; fill: var(--primary-text-color); flex-shrink: 0; }
         #dictionary-content { padding: 15px; background-color: rgba(0,0,0,0.2); border-radius: 6px; margin-top: 10px; }
         #dictionary-content.hidden { display: none; }
-        .dictionary-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px; }
-        .dictionary-list { list-style: none; padding: 0; margin: 0; max-height: 200px; overflow-y: auto; }
-        .dictionary-list li { display: flex; justify-content: space-between; align-items: center; padding: 8px 5px; border-bottom: 1px solid var(--border-color); }
-        .dictionary-list li .command-phrase { color: #a5c9ff; }
-        .dictionary-list li .command-output { font-style: italic; }
-        .dictionary-actions button { background: none; border: 1px solid var(--border-color); color: var(--primary-text-color); padding: 3px 8px; cursor: pointer; margin-left: 5px; }
-        #add-command-form { display: flex; gap: 10px; margin-bottom: 20px; }
-        #add-command-form input { flex-grow: 1; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--primary-text-color); padding: 8px; border-radius: 4px; }
-        .dictionary-io { display: flex; gap: 10px; margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 20px; }
-        #drop-zone { border: 2px dashed var(--border-color); padding: 20px; text-align: center; color: var(--secondary-text-color); transition: background-color 0.3s; flex-grow: 1; }
-        #drop-zone.drag-over { background-color: #4a6e96; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Editor de Dictado por Voz</h1>
-        <p class="instructions">Presiona <strong>Esc</strong> o el <strong>botón del micrófono</strong> para iniciar o detener el dictado.</p>
+        <h1>Editor de Dictado por Voz - MODO DIAGNÓSTICO</h1>
+        <p class="instructions">Presiona <strong>Esc</strong> o el <strong>botón del micrófono</strong> para iniciar la prueba de eco.</p>
         <div class="controls">
              <div class="controls-section controls-left">
                 <label for="language">Idioma:</label>
-                <!-- Nota: Este selector es visual por ahora. La lógica para cambiar el idioma de Deepgram 
-                     requeriría enviar el valor al backend al conectar, lo cual se puede añadir después. -->
                 <select id="language">
                     <option value="es" selected>Español</option>
                     <option value="en">Inglés</option>
@@ -96,192 +83,76 @@
             <div class="controls-section controls-right"><div id="status" class="status-ready">Listo</div></div>
         </div>
         <textarea id="editor"></textarea>
-        <div id="dictionary-section">
-            <button id="toggle-dictionary"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/></svg>Gestionar Diccionario</button>
-            <div id="dictionary-content" class="hidden">
-                <h3>Añadir Nuevo Comando</h3><form id="add-command-form" onsubmit="return false;"><input type="text" id="voice-command" placeholder="Frase de Voz" required><input type="text" id="text-output" placeholder="Texto de Salida" required><button id="add-command-btn" type="submit" class="dict-button">Añadir</button></form>
-                <div class="dictionary-columns"><div><h3>Comandos Personalizados</h3><ul id="custom-commands-list" class="dictionary-list"></ul></div><div><h3>Comandos por Defecto</h3><ul id="default-commands-list" class="dictionary-list"></ul></div></div>
-                <div class="dictionary-io"><button id="export-btn" class="dict-button">Exportar</button><button id="import-btn" class="dict-button">Importar</button><div id="drop-zone">O arrastra y suelta un archivo .json</div></div><input type="file" id="import-file" accept=".json" style="display: none;">
-            </div>
-        </div>
     </div>
     <div id="floating-transcript"></div>
 
     <script>
     // Variables globales para controlar el estado
     let isListening = false;
-    let mediaRecorder;
     let socket;
-    let toggleListening; // La definiremos después
-
-    // Mantenemos toda tu lógica del diccionario, ¡no cambia!
-    const defaultCommandDictionary = {
-        'punto': '. ', 'coma': ', ', 'dos puntos': ': ', 'punto y coma': '; ', 'signo de exclamación': '! ',
-        'signo de exclamación invertido': '¡', 'signo de interrogación': '? ', 'signo de interrogación invertido': '¿',
-        'abrir paréntesis': ' (', 'cerrar paréntesis': ') ', 'abrir comillas angulares': ' «', 'cerrar comillas angulares': '» ',
-        'nueva línea': '<br>', 'nuevo párrafo': '<p></p>', 'deshacer': '#undo', 'rehacer': '#redo'
-    };
-    let customCommands = {}; let fullCommandDictionary = {};
-    const loadCustomCommands = () => localStorage.getItem('customCommands') ? JSON.parse(localStorage.getItem('customCommands')) : {};
-    const saveCustomCommands = () => { localStorage.setItem('customCommands', JSON.stringify(customCommands)); updateFullDictionary(); };
-    const updateFullDictionary = () => { fullCommandDictionary = { ...customCommands, ...defaultCommandDictionary }; };
-    
-    // La lógica para mostrar el diccionario tampoco cambia.
-    const renderDictionary = () => {
-        const customList = document.getElementById('custom-commands-list'); const defaultList = document.getElementById('default-commands-list');
-        customList.innerHTML = ''; defaultList.innerHTML = '';
-        for (const command in customCommands) {
-            const li = document.createElement('li');
-            li.innerHTML = `<div><span class="command-phrase">${command}</span> &#8594; <span class="command-output">${customCommands[command]}</span></div><div class="dictionary-actions"><button class="edit-btn" data-command="${command}">Editar</button><button class="delete-btn" data-command="${command}">Eliminar</button></div>`;
-            customList.appendChild(li);
-        }
-        for (const command in defaultCommandDictionary) {
-            const li = document.createElement('li');
-            li.innerHTML = `<div><span class="command-phrase">${command}</span> &#8594; <span class="command-output">${defaultCommandDictionary[command]}</span></div>`;
-            defaultList.appendChild(li);
-        }
-    };
-
-    const savedHeight = localStorage.getItem('editorHeight') || 550;
+    let toggleListening; 
 
     tinymce.init({
         selector: '#editor',
         plugins: 'lists link image table code help wordcount autosave',
         toolbar: 'undo redo | blocks | bold italic removeformat | fontfamily fontsize | forecolor backcolor | alignleft aligncenter alignright | bullist numlist | link image',
-        height: parseInt(savedHeight), resize: 'vertical',
+        height: 550, resize: 'vertical',
         skin: 'oxide-dark', content_css: 'dark', language: 'es',
         content_style: "body { font-family: 'Arial Black', sans-serif; font-size: 14pt; }",
         setup: function (editor) {
             editor.on('keydown', (event) => { if (event.key === 'Escape') { event.preventDefault(); if (toggleListening) toggleListening(); }});
-            editor.on('init', () => {
-                editor.getBody().setAttribute('spellcheck', 'true');
-                const savedContent = localStorage.getItem('tinymce-autosave-content');
-                if (savedContent) { editor.setContent(savedContent); }
-            });
-            editor.on('keyup change', () => { localStorage.setItem('tinymce-autosave-content', editor.getContent()); });
-            editor.on('ResizeEditor', () => { localStorage.setItem('editorHeight', editor.getContainer().clientHeight); });
         }
     });
 
-    // --- ¡AQUÍ EMPIEZA LA NUEVA LÓGICA DE CONEXIÓN! ---
     window.addEventListener('DOMContentLoaded', () => {
         const status = document.getElementById('status');
-        const languageSelect = document.getElementById('language');
         const micButton = document.getElementById('micButton');
         const floatingTranscript = document.getElementById('floating-transcript');
         
-        // La gestión del diccionario se queda igual.
-        customCommands = loadCustomCommands(); updateFullDictionary(); renderDictionary();
-        const toggleBtn = document.getElementById('toggle-dictionary'); const dictContent = document.getElementById('dictionary-content');
-        const addForm = document.getElementById('add-command-form'); const voiceInput = document.getElementById('voice-command');
-        const outputInput = document.getElementById('text-output'); const customList = document.getElementById('custom-commands-list');
-        toggleBtn.addEventListener('click', () => dictContent.classList.toggle('hidden'));
-        addForm.addEventListener('submit', () => {
-            const voice = voiceInput.value.trim().toLowerCase(); const output = outputInput.value;
-            if (voice && output) { customCommands[voice] = output; saveCustomCommands(); renderDictionary(); voiceInput.value = ''; outputInput.value = ''; }
-        });
-        customList.addEventListener('click', (e) => {
-            const command = e.target.dataset.command; if (!command) return;
-            if (e.target.classList.contains('delete-btn')) { if (confirm(`¿Seguro que quieres eliminar el comando "${command}"?`)) { delete customCommands[command]; saveCustomCommands(); renderDictionary(); }
-            } else if (e.target.classList.contains('edit-btn')) { voiceInput.value = command; outputInput.value = customCommands[command]; delete customCommands[command]; saveCustomCommands(); }
-        });
-        const exportBtn = document.getElementById('export-btn'); const importBtn = document.getElementById('import-btn');
-        const importFile = document.getElementById('import-file'); const dropZone = document.getElementById('drop-zone');
-        exportBtn.addEventListener('click', () => {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(customCommands, null, 2));
-            const downloadAnchorNode = document.createElement('a');
-            downloadAnchorNode.setAttribute("href", dataStr); downloadAnchorNode.setAttribute("download", "diccionario.json");
-            document.body.appendChild(downloadAnchorNode); downloadAnchorNode.click(); downloadAnchorNode.remove();
-        });
-        importBtn.addEventListener('click', () => importFile.click());
-        importFile.addEventListener('change', (e) => handleFile(e.target.files[0]));
-        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-        dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); if (e.dataTransfer.files.length) { handleFile(e.dataTransfer.files[0]); } });
-        const handleFile = (file) => {
-            if (file && file.type === "application/json") {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try { const importedCommands = JSON.parse(event.target.result); Object.assign(customCommands, importedCommands); saveCustomCommands(); renderDictionary(); alert('Diccionario importado con éxito.'); }
-                    catch (err) { alert('Error: El archivo no es un JSON válido.'); }
-                }; reader.readAsText(file);
-            } else { alert('Por favor, selecciona un archivo .json válido.'); }
-        };
+        // --- CÓDIGO DE DIAGNÓSTICO ---
 
-        // Función para conectar y empezar a escuchar
+        // Función para conectar y empezar la prueba de eco
         const startListening = () => {
-            // Construye la URL del WebSocket de forma dinámica.
-            // Esto funciona tanto en local como en Vercel.
+            console.log("TEST: Intentando conectar al servidor de eco...");
+            status.textContent = 'Probando Eco...';
+            
             const url = window.location.origin.replace(/^http/, 'ws') + '/api/websocket';
             socket = new WebSocket(url);
 
             socket.onopen = () => {
-                console.log('Socket conectado. Pidiendo acceso al micrófono.');
-                navigator.mediaDevices.getUserMedia({ audio: true })
-                    .then(stream => {
-                        mediaRecorder = new MediaRecorder(stream);
-                        mediaRecorder.ondataavailable = event => {
-                            if (event.data.size > 0 && socket.readyState === 1) {
-                                socket.send(event.data); // Envía el audio a nuestro backend
-                            }
-                        };
-                        mediaRecorder.start(250); // Captura audio cada 250ms
-                        
-                        // Actualización visual
-                        isListening = true;
-                        status.textContent = 'Escuchando...';
-                        status.classList.replace('status-ready', 'status-listening');
-                        micButton.classList.add('blinking');
-                        floatingTranscript.classList.add('visible');
-                    }).catch(err => {
-                        console.error("Error al obtener el micrófono:", err);
-                        status.textContent = `Error: Micrófono`;
-                        stopListening();
-                    });
+                console.log("TEST: ¡Conexión con el servidor de eco ABIERTA!");
+                status.textContent = 'Eco Conectado';
+                status.classList.replace('status-ready', 'status-listening');
+                micButton.classList.add('blinking');
+                // Enviamos un mensaje de prueba al servidor.
+                socket.send("Hola, mundo");
             };
 
-            socket.onmessage = message => {
-                const data = JSON.parse(message.data);
-                const transcript = data.channel?.alternatives[0]?.transcript;
-                
-                if (transcript) {
-                    if (data.is_final && data.speech_final) {
-                        floatingTranscript.textContent = ''; // Limpia el texto intermedio
-                        // Procesa la transcripción final recibida de Deepgram
-                        const processedText = processTranscript(transcript);
-                        // Comprueba si es una acción especial como 'deshacer'
-                        if (processedText === '#undo') {
-                           tinymce.activeEditor.execCommand('Undo');
-                        } else if (processedText === '#redo') {
-                           tinymce.activeEditor.execCommand('Redo');
-                        } else {
-                           insertTextWithSmartSpacing(processedText);
-                        }
-                    } else {
-                        // Muestra la transcripción intermedia mientras hablamos
-                        floatingTranscript.textContent = transcript;
-                    }
-                }
-            };
-
-            socket.onclose = () => {
-                console.log('Socket desconectado.');
-                // Llama a la función de parada sin intentar cerrar el socket de nuevo
-                // El estado visual ya se actualiza dentro de stopListening
+            socket.onmessage = (event) => {
+                // Esto se ejecutará si el servidor nos devuelve el eco.
+                console.log("TEST: Mensaje recibido del servidor de eco:", event.data);
+                floatingTranscript.textContent = event.data;
+                floatingTranscript.classList.add('visible');
             };
 
             socket.onerror = (error) => {
-                console.error('Error de WebSocket:', error);
-                status.textContent = 'Error Conexión';
+                console.error('TEST: Error de WebSocket:', error);
+                status.textContent = 'Error en Eco';
+                // Mostramos el mismo log del error que veías antes para ser consistentes
+                console.log('Error de WebSocket:', error);
+            };
+
+            socket.onclose = () => {
+                console.log("TEST: Conexión de eco cerrada.");
+                // Llamamos a stopListening para que se encargue de limpiar la UI
                 stopListening();
             };
+
+            isListening = true; // Para que la función stopListening sepa qué hacer.
         };
 
-        // Función para detener la escucha
+        // Función para detener la prueba de eco
         const stopListening = () => {
-            if (mediaRecorder && mediaRecorder.state === 'recording') {
-                mediaRecorder.stop();
-            }
             if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
                 socket.close();
             }
@@ -294,51 +165,6 @@
             floatingTranscript.textContent = '';
         };
 
-        // Tus funciones para procesar el texto se quedan igual, ¡son perfectas!
-        function insertTextWithSmartSpacing(text) {
-            const editor = tinymce.activeEditor; const rng = editor.selection.getRng();
-            let textToInsert = text;
-            if (rng.collapsed) {
-                const textBefore = rng.startContainer.textContent.substring(0, rng.startOffset);
-                const lastChar = textBefore.slice(-1);
-                if (lastChar && lastChar.trim() !== '' && !['(', '¡', '¿', '«'].includes(lastChar)) {
-                    if (textToInsert && !/^\s/.test(textToInsert) && !/^[.,:;!?»\)]/.test(textToInsert.trim())) {
-                        textToInsert = ' ' + textToInsert;
-                    }
-                }
-            }
-            textToInsert = textToInsert.replace(/\s+([.,:;!?»\)])/g, '$1');
-            editor.execCommand('mceInsertContent', false, textToInsert);
-        }
-        function processTranscript(text) {
-            if (!text) return "";
-            const editor = tinymce.activeEditor; const rng = editor.selection.getRng();
-            const textBefore = rng.startContainer.textContent.substring(0, rng.startOffset);
-            const trimmedTextBefore = textBefore.trim(); const lastSignificantChar = trimmedTextBefore.slice(-1);
-            let processedText = text.trim().toLowerCase(); // Empezamos en minúsculas
-
-            // 1. Reemplazar comandos de diccionario
-            // Hacemos una búsqueda más inteligente para no reemplazar partes de palabras
-            const commandKeys = Object.keys(fullCommandDictionary).sort((a, b) => b.length - a.length); // Más largos primero
-            for(const command of commandKeys){
-                 const regex = new RegExp(`\\b${command}\\b`, 'gi');
-                 processedText = processedText.replace(regex, fullCommandDictionary[command]);
-            }
-            
-            // Si el texto es solo un comando de acción, lo devolvemos directamente
-            if (processedText === '#undo' || processedText === '#redo') return processedText;
-            
-            // 2. Mayúscula inicial de la frase
-            if (!trimmedTextBefore || ['.', '?', '!'].includes(lastSignificantChar)) {
-                if(processedText) processedText = processedText.charAt(0).toUpperCase() + processedText.slice(1);
-            }
-
-            // 3. Mayúscula después de punto en la misma frase
-            processedText = processedText.replace(/([.?!]\s+)(\w)/g, (match, p1, p2) => p1 + p2.toUpperCase());
-            processedText = processedText.replace(/\s\s+/g, ' ').trim();
-            return processedText;
-        }
-
         // Esta es la función principal que se llamará al pulsar el botón/Esc
         toggleListening = () => {
             if (isListening) {
@@ -349,8 +175,9 @@
         }
         micButton.addEventListener('click', toggleListening);
         document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape' && event.target.tagName.toLowerCase() !== 'select') {
-                event.preventDefault(); if (toggleListening) toggleListening();
+            if (event.key === 'Escape') {
+                event.preventDefault(); 
+                if (toggleListening) toggleListening();
             }
         });
     });

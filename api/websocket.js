@@ -1,29 +1,29 @@
-const { createClient } = require("@deepgram/sdk");
 const WebSocket = require('ws');
 
 // Creamos el servidor WebSocket UNA SOLA VEZ, fuera del manejador.
-// Esto permite que se reutilice entre invocaciones de la función.
+// Esto permite que la instancia se reutilice entre las invocaciones de la función.
 const wss = new WebSocket.Server({ noServer: true });
 
-// Definimos la lógica de conexión una sola vez.
+// Definimos la lógica de conexión para el servidor de eco.
 wss.on('connection', (ws_client) => {
-    console.log("LOG: ¡CLIENTE CONECTADO CON ÉXITO!");
+    console.log("LOG: ¡Cliente conectado al SERVIDOR DE ECO!");
 
-    const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
-    const connection = deepgram.listen.live({ model: 'nova-2', language: 'es', smart_format: true });
+    ws_client.on('message', (message) => {
+        // Convertimos el mensaje a texto para poder registrarlo y devolverlo.
+        const messageText = message.toString();
+        console.log(`LOG: Recibido en eco: "${messageText}"`);
 
-    connection.on('open', () => {
-        console.log("LOG: Conexión con Deepgram abierta.");
-        ws_client.on('message', (message) => connection.send(message));
-        ws_client.on('close', () => {
-            console.log("LOG: Cliente desconectado.");
-            if (connection.getReadyState() === 1) connection.finish();
-        });
+        // Enviamos el mensaje de vuelta al cliente.
+        ws_client.send(`El servidor dice: "${messageText}"`);
     });
 
-    connection.on('transcript', (data) => ws_client.send(JSON.stringify(data)));
-    connection.on('error', (e) => console.error("LOG: Error de Deepgram:", e));
-    ws_client.on('error', (e) => console.error("LOG: Error del Cliente WebSocket:", e));
+    ws_client.on('close', () => {
+        console.log("LOG: Cliente desconectado del servidor de eco.");
+    });
+
+    ws_client.on('error', (error) => {
+        console.error("LOG: Error en el servidor de eco:", error);
+    });
 });
 
 // Esta es la función que Vercel ejecutará en cada petición.
@@ -31,13 +31,13 @@ module.exports = (req, res) => {
     // Comprobamos si la petición es un intento de "upgrade" a WebSocket.
     if (req.headers['upgrade']?.toLowerCase() === 'websocket') {
         // Si lo es, le decimos al servidor WebSocket que maneje la petición.
-        // Crucialmente, esta función NO llama a res.end(). El control se transfiere al WebSocket.
+        // Esta función transfiere el control de la conexión al WebSocket y no cierra la respuesta.
         wss.handleUpgrade(req, res.socket, Buffer.alloc(0), (ws) => {
             wss.emit('connection', ws, req);
         });
     } else {
-        // Si es una petición HTTP normal, respondemos con un error y terminamos.
-        res.statusCode = 405; // Method Not Allowed
-        res.end();
+        // Si es una petición HTTP normal que llega aquí por error, la rechazamos.
+        res.statusCode = 400;
+        res.end('Esta ruta es solo para conexiones WebSocket.');
     }
 };
