@@ -1,55 +1,36 @@
-console.log("--- EJECUTANDO LA VERSIÓN CORRECTA DEL BACKEND ---");
-
 const { createClient } = require("@deepgram/sdk");
 const WebSocket = require('ws');
 
+// El manejador que Vercel ejecutará.
 module.exports = (req, res) => {
-  const wss = new WebSocket.Server({ noServer: true });
+    // Creamos un servidor WebSocket, pero le decimos que no maneje el servidor HTTP.
+    const wss = new WebSocket.Server({ noServer: true });
 
-  // Le decimos al servidor HTTP principal qué hacer cuando reciba una petición de "upgrade".
-  res.socket.server.on('upgrade', (request, socket, head) => {
-    // Aceptamos TODAS las peticiones de upgrade que lleguen a esta función,
-    // ya que vercel.json ya ha hecho el filtrado por nosotros.
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      wss.emit('connection', ws, request);
-    });
-  });
+    // Esta es la lógica principal: qué hacer cuando un cliente se conecta.
+    wss.on('connection', (ws_client) => {
+        console.log("LOG: Cliente conectado al backend de WebSocket.");
 
-  wss.on('connection', (ws_client) => {
-    console.log("Cliente conectado al WebSocket!");
+        const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
+        const connection = deepgram.listen.live({ model: 'nova-2', language: 'es', smart_format: true });
 
-    const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
-    const connection = deepgram.listen.live({
-      model: 'nova-2',
-      language: 'es',
-      smart_format: true,
-    });
+        connection.on('open', () => {
+            console.log("LOG: Conexión con Deepgram abierta.");
+            ws_client.on('message', (message) => connection.send(message));
+            ws_client.on('close', () => {
+                console.log("LOG: Cliente desconectado.");
+                if(connection.getReadyState() === 1) connection.finish();
+            });
+        });
 
-    connection.on('open', () => {
-      console.log("Conexión con Deepgram abierta.");
-      ws_client.on('message', (message) => {
-        if (connection.getReadyState() === 1) {
-          connection.send(message);
-        }
-      });
+        connection.on('transcript', (data) => ws_client.send(JSON.stringify(data)));
+        connection.on('error', (e) => console.error("LOG: Error de Deepgram:", e));
+        ws_client.on('error', (e) => console.error("LOG: Error del Cliente WebSocket:", e));
     });
 
-    connection.on('transcript', (data) => {
-      ws_client.send(JSON.stringify(data));
+    // Esta es la parte crucial y diferente.
+    // Tomamos la petición HTTP entrante (`req`) y le decimos al servidor WebSocket
+    // que la "actualice" a una conexión WebSocket. Es el método más directo.
+    wss.handleUpgrade(req, req.socket, Buffer.alloc(0), (ws) => {
+        wss.emit('connection', ws, req);
     });
-
-    ws_client.on('close', () => {
-      console.log("El cliente se ha desconectado.");
-      if (connection.getReadyState() === 1) {
-         connection.finish();
-      }
-    });
-    
-    connection.on('error', (error) => {
-      console.error('Error de Deepgram:', error);
-    });
-  });
-  
-  // Finalmente, le decimos al servidor que intente hacer el "upgrade" a WebSocket.
-  res.socket.server.emit('upgrade', req, req.socket, Buffer.alloc(0));
 };
