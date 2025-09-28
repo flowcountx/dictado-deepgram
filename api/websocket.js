@@ -1,3 +1,5 @@
+console.log("--- EJECUTANDO LA VERSIÓN CORRECTA DEL BACKEND ---");
+
 const { createClient } = require("@deepgram/sdk");
 const WebSocket = require('ws');
 
