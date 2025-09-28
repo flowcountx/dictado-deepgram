@@ -1,27 +1,18 @@
 const { createClient } = require("@deepgram/sdk");
 const WebSocket = require('ws');
 
-// Esta función se encarga de manejar la "actualización" de la conexión de HTTP a WebSocket.
-// Es la forma más robusta y compatible de hacerlo en Vercel.
 module.exports = (req, res) => {
-  // Creamos una instancia del servidor de WebSocket, pero sin servidor propio.
   const wss = new WebSocket.Server({ noServer: true });
 
   // Le decimos al servidor HTTP principal qué hacer cuando reciba una petición de "upgrade".
   res.socket.server.on('upgrade', (request, socket, head) => {
-    // Si la ruta no es la correcta, destruimos el socket.
-    if (request.url !== '/api/websocket') {
-      socket.destroy();
-      return;
-    }
-    
-    // Si la ruta es correcta, manejamos el upgrade y emitimos la conexión.
+    // Aceptamos TODAS las peticiones de upgrade que lleguen a esta función,
+    // ya que vercel.json ya ha hecho el filtrado por nosotros.
     wss.handleUpgrade(request, socket, head, (ws) => {
       wss.emit('connection', ws, request);
     });
   });
 
-  // Esta lógica se ejecuta CADA VEZ que un nuevo cliente se conecta con éxito.
   wss.on('connection', (ws_client) => {
     console.log("Cliente conectado al WebSocket!");
 
@@ -57,7 +48,6 @@ module.exports = (req, res) => {
     });
   });
   
-  // Finalmente, manejamos la petición inicial.
-  // Le decimos al servidor que intente hacer el "upgrade" a WebSocket.
+  // Finalmente, le decimos al servidor que intente hacer el "upgrade" a WebSocket.
   res.socket.server.emit('upgrade', req, req.socket, Buffer.alloc(0));
 };
