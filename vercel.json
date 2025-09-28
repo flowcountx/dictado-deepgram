@@ -1,16 +1,4 @@
 {
   "version": 2,
-  "routes": [
-    {
-      "src": "/api/websocket",
-      "dest": "/api/websocket.js"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/public/index.html"
-    }
-  ]
+  "public": "public"
 }
