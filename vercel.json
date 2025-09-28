@@ -1,7 +1,0 @@
-{
-  "functions": {
-    "api/websocket.js": {
-      "maxDuration": 300
-    }
-  }
-}

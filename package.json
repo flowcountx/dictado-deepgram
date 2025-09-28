@@ -1,16 +1,19 @@
 {
-  "name": "dictado-de-voz-a-texto-con-deep-g-en-desarrollo",
+  "name": "dictado-deepgram",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Aplicación de dictado de voz a texto con Deepgram y WebSockets.",
+  "main": "server.js",
   "scripts": {
+    "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@deepgram/sdk": "^4.11.2",
-    "ws": "^8.18.3"
+    "@deepgram/sdk": "^3.3.3",
+    "ws": "^8.17.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
