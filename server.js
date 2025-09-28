@@ -23,15 +23,15 @@ wss.on('connection', (ws_client) => {
     console.log("LOG: ¡Cliente conectado al servidor WebSocket!");
     const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
     
-    // --- CAMBIO CRÍTICO AQUÍ ---
-    // Eliminamos 'encoding' y 'sample_rate' que causaban problemas.
-    // Añadimos 'punctuate: true' para ayudar a Deepgram a procesar el texto.
+    // --- LA SOLUCIÓN FINAL ESTÁ AQUÍ ---
     const connection = deepgram.listen.live({
         model: 'nova-2',
         language: 'es',
         smart_format: true,
-        punctuate: true, // Ayuda a detectar pausas y finales de frases.
-        interim_results: true // Envía resultados más rápido.
+        interim_results: true, // Envía resultados rápidos mientras hablas
+        endpointing: true,       // Activa la detección de pausas
+        utterance_end_ms: '1000', // Finaliza la frase tras 1s de silencio
+        keepalive: 'true'        // Mantiene la conexión más robusta
     });
 
     connection.on('open', () => {
@@ -39,13 +39,8 @@ wss.on('connection', (ws_client) => {
     });
 
     connection.on('transcript', (data) => {
-        // Log para confirmar que recibimos la transcripción de vuelta.
-        console.log("LOG: Transcripción recibida de Deepgram.");
+        console.log("LOG: Transcripción recibida de Deepgram!");
         ws_client.send(JSON.stringify(data));
-    });
-    
-    connection.on('close', (event) => {
-        console.log("LOG: Conexión con Deepgram cerrada.", event);
     });
 
     connection.on('error', (e) => {
@@ -53,8 +48,8 @@ wss.on('connection', (ws_client) => {
     });
 
     ws_client.on('message', (message) => {
-        // Log para confirmar que el audio llega al servidor.
-        console.log(`LOG: Recibido paquete de audio del cliente. Tamaño: ${message.length} bytes.`);
+        // Este log ya no es necesario, sabemos que funciona.
+        // console.log(`LOG: Recibido paquete de audio. Tamaño: ${message.length} bytes.`);
         if (connection.getReadyState() === 1) { // 1 = OPEN
             connection.send(message);
         }
