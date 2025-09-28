@@ -21,24 +21,9 @@ const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (ws_client) => {
     console.log("LOG: ¡Cliente conectado al servidor WebSocket!");
+
     const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
     const connection = deepgram.listen.live({ model: 'nova-2', language: 'es', smart_format: true });
-
-    // CAMBIO CRÍTICO: Empezamos a escuchar los mensajes del navegador INMEDIATAMENTE.
-    ws_client.on('message', (message) => {
-        // console.log("LOG: Recibido audio del cliente."); // Puedes descomentar esto para depuración extra
-        // Solo reenviamos el mensaje si la conexión con Deepgram está completamente abierta.
-        if (connection.getReadyState() === 1) { // 1 = OPEN
-            connection.send(message);
-        }
-    });
-
-    ws_client.on('close', () => {
-        console.log("LOG: Cliente desconectado.");
-        if (connection.getReadyState() === 1) {
-            connection.finish();
-        }
-    });
 
     connection.on('open', () => {
         console.log("LOG: Conexión con Deepgram abierta y lista para recibir audio.");
@@ -50,6 +35,25 @@ wss.on('connection', (ws_client) => {
 
     connection.on('error', (e) => {
         console.error("LOG: Error de Deepgram:", e);
+    });
+
+    ws_client.on('message', (message) => {
+        // ESTE ES EL LOG MÁS IMPORTANTE. AHORA DEBERÍAMOS VERLO.
+        console.log(`LOG: Recibido un paquete de audio del cliente. Tamaño: ${message.length} bytes.`);
+        if (connection.getReadyState() === 1) {
+            connection.send(message);
+        }
+    });
+
+    ws_client.on('close', () => {
+        console.log("LOG: Cliente desconectado.");
+        if (connection.getReadyState() === 1) {
+            connection.finish();
+        }
+    });
+    
+    ws_client.on('error', (e) => {
+         console.error("LOG: Error del cliente WebSocket:", e);
     });
 });
 
