@@ -1,16 +1,16 @@
 {
   "name": "dictado-deepgram",
   "version": "1.0.0",
-  "description": "Aplicación de dictado de voz a texto con Deepgram y WebSockets.",
+  "description": "Aplicación de dictado de voz a texto con Deepgram.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@deepgram/sdk": "^3.3.3",
+    "express": "^4.19.2",
     "ws": "^8.17.0"
   },
   "engines": {
