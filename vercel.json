@@ -9,7 +9,11 @@
   "routes": [
     {
       "src": "/api/websocket",
-      "dest": "/api/websocket"
+      "dest": "/api/websocket.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/public/$1"
     }
   ]
 }
