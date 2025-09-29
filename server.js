@@ -17,9 +17,14 @@ app.get('/', (req, res) => {
 app.post('/api/transcribe', async (req, res) => {
     console.log("LOG: Recibida petición de transcripción.");
     try {
+        // --- CAMBIO ÚNICO Y CRÍTICO AQUÍ ---
         const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
             req.body, // El buffer de audio
-            { model: 'nova-2', language: 'es', smart_format: true }
+            {
+                model: 'nova-3', // 1. Modelo actualizado al más reciente y potente.
+                language: 'es',
+                smart_format: false // 2. Mantenemos esto desactivado para que TU lógica de puntuación funcione.
+            }
         );
 
         if (error) {

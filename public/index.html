@@ -11,15 +11,13 @@
             --bg-color: #1e1e1e; --surface-color: #2d2d2d; --primary-text-color: #dcdcdc; 
             --secondary-text-color: #a0a0a0; --border-color: #444; --record-color: #dc3545;
         }
-        html { overflow-y: scroll; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--bg-color); color: var(--primary-text-color); margin: 0;
         }
         .container {
-            width: 90%; max-width: 900px; background-color: var(--surface-color); padding: 25px;
+            width: 90%; max-width: 900px; margin: 20px auto; background-color: var(--surface-color); padding: 25px;
             border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); border: 1px solid var(--border-color);
-            margin: 20px auto;
         }
         h1, .instructions { text-align: center; }
         .instructions { color: var(--secondary-text-color); margin-bottom: 20px; font-style: italic; }
@@ -29,35 +27,13 @@
         }
         .controls-section { display: flex; align-items: center; gap: 15px; flex: 1; }
         .controls-left { justify-content: flex-start; } .controls-center { justify-content: center; } .controls-right { justify-content: flex-end; }
-        .controls label { font-weight: bold; }
-        .controls select, .dict-button {
-            background-color: var(--bg-color); color: var(--primary-text-color); border: 1px solid var(--border-color);
-            border-radius: 4px; padding: 8px 12px; cursor: pointer;
-        }
         #micButton {
-            background: none; border: 1px solid var(--border-color); padding: 0; display: flex;
-            align-items: center; justify-content: center; cursor: pointer; transition: background-color 0.2s ease;
-            width: 50px; height: 50px; border-radius: 50%; 
+            background: none; border: 1px solid var(--border-color); width: 50px; height: 50px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer;
         }
-        #micButton:hover { background-color: rgba(255, 255, 255, 0.1); }
-        #micButton svg { width: 28px; height: 28px; fill: var(--primary-text-color); }
-        @keyframes blink-animation { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
-        .blinking { border-color: var(--record-color) !important; }
-        .blinking #micIcon { fill: var(--record-color); animation: blink-animation 1.5s infinite; }
-        #status {
-            font-weight: bold; padding: 8px 12px; border-radius: 15px;
-            color: #fff; min-width: 110px; text-align: center;
-        }
-        .status-ready { background-color: #4a6e96; } .status-listening { background-color: var(--record-color); } .status-error { background-color: #ffc107; color: #000; }
-        .tox .tox-edit-area__iframe { background-color: #252525 !important; }
-        #dictionary-section { margin-top: 25px; border-top: 1px solid var(--border-color); padding-top: 15px; }
-        #toggle-dictionary {
-            width: 100%; background: none; border: none; color: var(--primary-text-color);
-            padding: 10px; font-size: 1.1em; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;
-        }
-        #toggle-dictionary svg { width: 24px; height: 24px; fill: var(--primary-text-color); flex-shrink: 0; }
-        #dictionary-content { padding: 15px; background-color: rgba(0,0,0,0.2); border-radius: 6px; margin-top: 10px; }
-        #dictionary-content.hidden { display: none; }
+        #micButton.blinking { border-color: var(--record-color); }
+        #micButton.blinking svg { fill: var(--record-color); }
+        #status { font-weight: bold; }
     </style>
 </head>
 <body>
@@ -75,101 +51,98 @@
         </div>
         <textarea id="editor"></textarea>
     </div>
-
     <script>
-    // --- LÓGICA DE TINYMCE RESTAURADA ---
-    const savedHeight = localStorage.getItem('editorHeight') || 550;
-    tinymce.init({
-        selector: '#editor',
-        plugins: 'lists link image table code help wordcount autosave',
-        toolbar: 'undo redo | blocks | bold italic removeformat | fontfamily fontsize | forecolor backcolor | alignleft aligncenter alignright | bullist numlist | link image',
-        height: parseInt(savedHeight), resize: 'vertical',
-        skin: 'oxide-dark', content_css: 'dark', language: 'es',
-        content_style: "body { font-family: 'Arial Black', sans-serif; font-size: 14pt; }",
-        setup: function (editor) {
-            editor.on('keydown', (event) => { if (event.key === 'Escape') { event.preventDefault(); if (toggleListening) toggleListening(); }});
-            editor.on('init', () => {
-                editor.getBody().setAttribute('spellcheck', 'true');
-                const savedContent = localStorage.getItem('tinymce-autosave-content');
-                if (savedContent) { editor.setContent(savedContent); }
-            });
-            editor.on('keyup change', () => { localStorage.setItem('tinymce-autosave-content', editor.getContent()); });
-            editor.on('ResizeEditor', () => { localStorage.setItem('editorHeight', editor.getContainer().clientHeight); });
-        }
-    });
+        const savedHeight = localStorage.getItem('editorHeight') || 550;
+        tinymce.init({
+            selector: '#editor',
+            plugins: 'lists link image table code help wordcount autosave',
+            toolbar: 'undo redo | blocks | bold italic removeformat | fontfamily fontsize | forecolor backcolor | alignleft aligncenter alignright | bullist numlist | link image',
+            height: parseInt(savedHeight), resize: 'vertical',
+            skin: 'oxide-dark', content_css: 'dark', language: 'es',
+            content_style: "body { font-family: 'Arial Black', sans-serif; font-size: 14pt; }",
+            setup: function (editor) {
+                editor.on('keydown', (event) => {
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        toggleListening();
+                    }
+                });
+                editor.on('init', () => {
+                    editor.getBody().setAttribute('spellcheck', 'true');
+                    const savedContent = localStorage.getItem('tinymce-autosave-content');
+                    if (savedContent) { editor.setContent(savedContent); }
+                });
+                editor.on('keyup change', () => { localStorage.setItem('tinymce-autosave-content', editor.getContent()); });
+                editor.on('ResizeEditor', () => { localStorage.setItem('editorHeight', editor.getContainer().clientHeight); });
+            }
+        });
 
-    // --- LÓGICA DE LA APLICACIÓN (CORREGIDA Y COMPLETA) ---
-    window.addEventListener('DOMContentLoaded', () => {
-        const micButton = document.getElementById('micButton');
-        const statusDiv = document.getElementById('status');
-        
-        let isRecording = false;
-        let mediaRecorder;
-        let audioChunks = [];
-        let toggleListening; // Se define más adelante
+        window.addEventListener('DOMContentLoaded', () => {
+            const micButton = document.getElementById('micButton');
+            const statusDiv = document.getElementById('status');
+            
+            let isRecording = false;
+            let mediaRecorder;
+            let audioChunks = [];
 
-        // --- LÓGICA DE DICCIONARIO Y PROCESAMIENTO DE TEXTO RESTAURADA ---
-        const defaultCommandDictionary = {
-            'punto': '. ', 'coma': ', ', 'dos puntos': ': ', 'punto y coma': '; ', 'signo de exclamación': '! ',
-            'signo de exclamación invertido': '¡', 'signo de interrogación': '? ', 'signo de interrogación invertido': '¿',
-            'nueva línea': '<br>', 'nuevo párrafo': '<p></p>'
-        };
-        let customCommands = {}; let fullCommandDictionary = {};
-        const loadCustomCommands = () => localStorage.getItem('customCommands') ? JSON.parse(localStorage.getItem('customCommands')) : {};
-        const updateFullDictionary = () => { fullCommandDictionary = { ...customCommands, ...defaultCommandDictionary }; };
-        customCommands = loadCustomCommands();
-        updateFullDictionary();
+            const defaultCommandDictionary = {
+                'punto': '. ', 'coma': ', ', 'dos puntos': ': ', 'punto y coma': '; ',
+                'signo de exclamación': '! ', 'signo de exclamación invertido': '¡',
+                'signo de interrogación': '? ', 'signo de interrogación invertido': '¿',
+                'nueva línea': '<br>', 'nuevo párrafo': '<p></p>'
+            };
 
-        function insertTextWithSmartSpacing(text) {
-            const editor = tinymce.activeEditor; const rng = editor.selection.getRng();
-            let textToInsert = text;
-            if (rng.collapsed) {
+            function processTranscript(text) {
+                if (!text) return "";
+                const editor = tinymce.activeEditor;
+                const rng = editor.selection.getRng();
                 const textBefore = rng.startContainer.textContent.substring(0, rng.startOffset);
-                const lastChar = textBefore.slice(-1);
-                if (lastChar && lastChar.trim() !== '' && !['(', '¡', '¿'].includes(lastChar)) {
-                    if (textToInsert && !/^\s/.test(textToInsert) && !/^[.,:;!?\)]/.test(textToInsert.trim())) {
-                        textToInsert = ' ' + textToInsert;
+                const trimmedTextBefore = textBefore.trim();
+                const lastSignificantChar = trimmedTextBefore.slice(-1);
+                
+                let processedText = text.trim().toLowerCase();
+                
+                Object.entries(defaultCommandDictionary).forEach(([command, replacement]) => {
+                    const regex = new RegExp(`\\b${command}\\b`, 'gi');
+                    processedText = processedText.replace(regex, replacement);
+                });
+                
+                if (!trimmedTextBefore || ['.', '?', '!'].includes(lastSignificantChar)) {
+                    if (processedText) {
+                        processedText = processedText.charAt(0).toUpperCase() + processedText.slice(1);
                     }
                 }
+                
+                return processedText;
             }
-            editor.execCommand('mceInsertContent', false, textToInsert);
-        }
-        function processTranscript(text) {
-            if (!text) return "";
-            const editor = tinymce.activeEditor; const rng = editor.selection.getRng();
-            const textBefore = rng.startContainer.textContent.substring(0, rng.startOffset);
-            const trimmedTextBefore = textBefore.trim(); const lastSignificantChar = trimmedTextBefore.slice(-1);
-            let processedText = text.trim().toLowerCase();
-            const commandKeys = Object.keys(fullCommandDictionary).sort((a, b) => b.length - a.length);
-            for(const command of commandKeys){
-                 const regex = new RegExp(`\\b${command}\\b`, 'gi');
-                 processedText = processedText.replace(regex, fullCommandDictionary[command]);
-            }
-            if (!trimmedTextBefore || ['.', '?', '!'].includes(lastSignificantChar)) {
-                if(processedText) processedText = processedText.charAt(0).toUpperCase() + processedText.slice(1);
-            }
-            return processedText;
-        }
 
-        // --- MANEJO DE ESTADO CORREGIDO ---
-        toggleListening = async () => {
-            if (isRecording) {
-                // Si está grabando, detener.
-                mediaRecorder.stop();
-                isRecording = false;
-                micButton.classList.remove('blinking');
-                statusDiv.textContent = 'Transcribiendo...';
-            } else {
-                // Si no está grabando, empezar.
+            function insertTextWithSmartSpacing(text) {
+                const editor = tinymce.activeEditor;
+                const rng = editor.selection.getRng();
+                let textToInsert = text;
+                if (rng.collapsed) {
+                    const textBefore = rng.startContainer.textContent.substring(0, rng.startOffset);
+                    const lastChar = textBefore.slice(-1);
+                    if (lastChar && lastChar.trim() !== '' && !['(', '¡', '¿'].includes(lastChar)) {
+                        if (textToInsert && !/^\s/.test(textToInsert) && !/^[.,:;!?\)]/.test(textToInsert.trim())) {
+                            textToInsert = ' ' + textToInsert;
+                        }
+                    }
+                }
+                editor.execCommand('mceInsertContent', false, textToInsert);
+            }
+
+            const startRecording = async () => {
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                    mediaRecorder = new MediaRecorder(stream);
 
                     mediaRecorder.ondataavailable = (event) => {
                         audioChunks.push(event.data);
                     };
 
                     mediaRecorder.onstop = async () => {
+                        statusDiv.textContent = 'Transcribiendo...';
                         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                         
                         try {
@@ -180,7 +153,7 @@
                             });
 
                             if (!response.ok) throw new Error(`Error del servidor: ${response.statusText}`);
-
+                            
                             const data = await response.json();
                             if (data.transcript) {
                                 const processedText = processTranscript(data.transcript);
@@ -190,7 +163,6 @@
                             console.error("Error al transcribir:", err);
                             statusDiv.textContent = 'Error';
                         } finally {
-                            // Importante: Resetear el estado a "Listo" aquí, después de todo el proceso.
                             statusDiv.textContent = 'Listo';
                         }
                     };
@@ -200,25 +172,40 @@
                     isRecording = true;
                     micButton.classList.add('blinking');
                     statusDiv.textContent = 'Grabando...';
-
                 } catch (err) {
                     console.error("Error al acceder al micrófono:", err);
                     statusDiv.textContent = 'Error Micrófono';
-                    isRecording = false; // Asegurarse de que el estado es correcto en caso de error.
+                    isRecording = false;
                 }
-            }
-        };
+            };
 
-        micButton.addEventListener('click', toggleListening);
-        document.addEventListener('keydown', (event) => {
-            // Se usa el setup de TinyMCE para la tecla Esc, que es más robusto.
-            // Este es un respaldo por si el foco no está en el editor.
-            if (event.key === 'Escape' && !tinymce.activeEditor.hasFocus()) {
-                event.preventDefault();
-                toggleListening();
-            }
+            const stopRecording = () => {
+                if (mediaRecorder && isRecording) {
+                    mediaRecorder.stop();
+                    isRecording = false;
+                    micButton.classList.remove('blinking');
+                    statusDiv.textContent = 'Procesando...';
+                }
+            };
+
+            const toggleListening = () => {
+                if (isRecording) {
+                    stopRecording();
+                } else {
+                    startRecording();
+                }
+            };
+
+            micButton.addEventListener('click', toggleListening);
+            
+            // Este es un respaldo adicional para la tecla Esc por si el foco no está en el editor.
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && !tinymce.activeEditor.hasFocus()) {
+                    event.preventDefault();
+                    toggleListening();
+                }
+            });
         });
-    });
     </script>
 </body>
 </html>
