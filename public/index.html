@@ -62,164 +62,30 @@
         <textarea id="editor"></textarea>
     </div>
     <script>
-    window.addEventListener('DOMContentLoaded', () => {
-        const micButton = document.getElementById('micButton');
-        const statusDiv = document.getElementById('status');
-        const punctuationToggle = document.getElementById('punctuation-toggle');
-        
-        let isRecording = false;
-        let mediaRecorder;
-        let audioChunks = [];
+        // Declaramos la variable 'toggleListening' en un scope global para que TinyMCE pueda encontrarla.
         let toggleListening;
 
-        // --- CAMBIO CRÍTICO AQUÍ: Default a desmarcado ---
-        // Cargar y guardar el estado del selector de puntuación
-        const savedPunctuationState = localStorage.getItem('punctuationEnabled') === 'true';
-        punctuationToggle.checked = savedPuncuationState;
-        punctuationToggle.addEventListener('change', () => {
-            localStorage.setItem('punctuationEnabled', punctuationToggle.checked);
-        });
-
-        const defaultCommandDictionary = {
-            'punto': '. ', 'coma': ', ', 'dos puntos': ': ', 'punto y coma': '; ',
-            'signo de exclamación': '! ', 'signo de exclamación invertido': '¡',
-            'signo de interrogación': '? ', 'signo de interrogación invertido': '¿',
-            'nueva línea': '<br>', 'nuevo párrafo': '<p></p>'
-        };
-
-        function processTranscript(text) {
-            if (!text) return "";
-            
-            let processedText = text.trim();
-            
-            // Reemplazar comandos de voz siempre
-            Object.entries(defaultCommandDictionary).forEach(([command, replacement]) => {
-                const regex = new RegExp(`\\b${command}\\b`, 'gi');
-                processedText = processedText.replace(regex, replacement);
-            });
-            
-            // Si la puntuación está activada, borramos el punto final
-            if (punctuationToggle.checked && processedText.endsWith('.')) {
-                processedText = processedText.slice(0, -1);
-            }
-
-            // --- CORRECCIÓN DE MAYÚSCULAS ---
-            // Aplicar nuestra lógica de capitalización en AMBOS modos para un comportamiento consistente.
-            const editor = tinymce.activeEditor;
-            const rng = editor.selection.getRng();
-            const textBefore = rng.startContainer.textContent.substring(0, rng.startOffset);
-            const trimmedTextBefore = textBefore.trim();
-            const lastSignificantChar = trimmedTextBefore.slice(-1);
-            
-            // Comprobamos si el contexto requiere una mayúscula.
-            const needsCapital = !trimmedTextBefore || ['.', '?', '!'].includes(lastSignificantChar);
-
-            if (needsCapital) {
-                // Si se necesita, nos aseguramos de que la primera letra sea mayúscula.
-                processedText = processedText.charAt(0).toUpperCase() + processedText.slice(1);
-            } else {
-                // Si NO se necesita, forzamos a que la primera letra sea minúscula.
-                processedText = processedText.charAt(0).toLowerCase() + processedText.slice(1);
-            }
-            
-            // Limpiar el espacio antes de los signos de puntuación.
-            processedText = processedText.replace(/\s+([.,:;!?\)])/g, '$1');
-            
-            return processedText;
-        }
-
-        function insertTextWithSmartSpacing(text) {
-            const editor = tinymce.activeEditor;
-            const rng = editor.selection.getRng();
-            let textToInsert = text;
-            if (rng.collapsed) {
-                const textBefore = rng.startContainer.textContent.substring(0, rng.startOffset);
-                const lastChar = textBefore.slice(-1);
-                if (lastChar && /\S/.test(lastChar) && !['(', '¡', '¿'].includes(lastChar)) {
-                    if (textToInsert && /^\S/.test(textToInsert) && !/^[.,:;!?\)]/.test(textToInsert.trim())) {
-                        textToInsert = ' ' + textToInsert;
-                    }
-                }
-            }
-            editor.execCommand('mceInsertContent', false, textToInsert);
-        }
-
-        const startRecording = async () => {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
-                audioChunks = [];
-
-                mediaRecorder.ondataavailable = (event) => audioChunks.push(event.data);
-
-                mediaRecorder.onstop = async () => {
-                    statusDiv.textContent = 'Transcribiendo...';
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                    const punctuate = punctuationToggle.checked;
-                    
-                    try {
-                        const response = await fetch(`/api/transcribe?punctuate=${punctuate}`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'audio/webm' },
-                            body: audioBlob
-                        });
-
-                        if (!response.ok) throw new Error(`Error del servidor: ${response.statusText}`);
-                        
-                        const data = await response.json();
-                        if (data.transcript) {
-                            const processedText = processTranscript(data.transcript);
-                            insertTextWithSmartSpacing(processedText);
-                        }
-                    } catch (err) {
-                        console.error("Error al transcribir:", err);
-                        statusDiv.textContent = 'Error';
-                    } finally {
-                        statusDiv.textContent = 'Listo';
-                    }
-                };
-
-                mediaRecorder.start();
-                isRecording = true;
-                micButton.classList.add('blinking');
-                statusDiv.textContent = 'Grabando...';
-            } catch (err) {
-                console.error("Error al acceder al micrófono:", err);
-                statusDiv.textContent = 'Error Micrófono';
-                isRecording = false;
-            }
-        };
-
-        const stopRecording = () => {
-            if (mediaRecorder && isRecording) {
-                mediaRecorder.stop();
-                isRecording = false;
-                micButton.classList.remove('blinking');
-                statusDiv.textContent = 'Procesando...';
-            }
-        };
-
-        toggleListening = () => {
-            if (isRecording) {
-                stopRecording();
-            } else {
-                startRecording();
-            }
-        };
-
+        // --- INICIALIZACIÓN DE TINYMCE (FUERA DEL DOMCONTENTLOADED) ---
+        // Esto asegura que el editor se renderice correctamente en cuanto la página carga.
         const savedHeight = localStorage.getItem('editorHeight') || 550;
         tinymce.init({
             selector: '#editor',
             plugins: 'lists link image table code help wordcount autosave',
             toolbar: 'undo redo | blocks | bold italic removeformat | fontfamily fontsize | forecolor backcolor | alignleft aligncenter alignright | bullist numlist | link image',
-            height: parseInt(savedHeight), resize: 'vertical',
-            skin: 'oxide-dark', content_css: 'dark', language: 'es',
+            height: parseInt(savedHeight),
+            resize: 'vertical',
+            skin: 'oxide-dark',
+            content_css: 'dark',
+            language: 'es',
             content_style: "body { font-family: 'Arial Black', sans-serif; font-size: 14pt; }",
             setup: function (editor) {
                 editor.on('keydown', (event) => {
                     if (event.key === 'Escape') {
                         event.preventDefault();
-                        toggleListening();
+                        // La función 'toggleListening' será definida más abajo, pero estará disponible aquí cuando se necesite.
+                        if (toggleListening) {
+                            toggleListening();
+                        }
                     }
                 });
                 editor.on('init', () => {
@@ -232,8 +98,145 @@
             }
         });
 
-        micButton.addEventListener('click', toggleListening);
-    });
+        // --- LÓGICA DE LA APLICACIÓN (DENTRO DEL DOMCONTENTLOADED) ---
+        // Esto asegura que todo el HTML está cargado antes de intentar manipularlo.
+        window.addEventListener('DOMContentLoaded', () => {
+            const micButton = document.getElementById('micButton');
+            const statusDiv = document.getElementById('status');
+            const punctuationToggle = document.getElementById('punctuation-toggle');
+            
+            let isRecording = false;
+            let mediaRecorder;
+            let audioChunks = [];
+
+            const savedPunctuationState = localStorage.getItem('punctuationEnabled') === 'true';
+            punctuationToggle.checked = savedPunctuationState;
+            punctuationToggle.addEventListener('change', () => {
+                localStorage.setItem('punctuationEnabled', punctuationToggle.checked);
+            });
+
+            const defaultCommandDictionary = {
+                'punto': '. ', 'coma': ', ', 'dos puntos': ': ', 'punto y coma': '; ',
+                'signo de exclamación': '! ', 'signo de exclamación invertido': '¡',
+                'signo de interrogación': '? ', 'signo de interrogación invertido': '¿',
+                'nueva línea': '<br>', 'nuevo párrafo': '<p></p>'
+            };
+
+            function processTranscript(text) {
+                if (!text) return "";
+                
+                let processedText = text.trim();
+                
+                Object.entries(defaultCommandDictionary).forEach(([command, replacement]) => {
+                    const regex = new RegExp(`\\b${command}\\b`, 'gi');
+                    processedText = processedText.replace(regex, replacement);
+                });
+                
+                if (punctuationToggle.checked && processedText.endsWith('.')) {
+                    processedText = processedText.slice(0, -1);
+                }
+
+                const editor = tinymce.activeEditor;
+                const rng = editor.selection.getRng();
+                const textBefore = rng.startContainer.textContent.substring(0, rng.startOffset);
+                const trimmedTextBefore = textBefore.trim();
+                const lastSignificantChar = trimmedTextBefore.slice(-1);
+                
+                const needsCapital = !trimmedTextBefore || ['.', '?', '!'].includes(lastSignificantChar);
+
+                if (needsCapital) {
+                    processedText = processedText.charAt(0).toUpperCase() + processedText.slice(1);
+                } else {
+                    processedText = processedText.charAt(0).toLowerCase() + processedText.slice(1);
+                }
+                
+                processedText = processedText.replace(/\s+([.,:;!?\)])/g, '$1');
+                
+                return processedText;
+            }
+
+            function insertTextWithSmartSpacing(text) {
+                const editor = tinymce.activeEditor;
+                const rng = editor.selection.getRng();
+                let textToInsert = text;
+                if (rng.collapsed) {
+                    const textBefore = rng.startContainer.textContent.substring(0, rng.startOffset);
+                    const lastChar = textBefore.slice(-1);
+                    if (lastChar && /\S/.test(lastChar) && !['(', '¡', '¿'].includes(lastChar)) {
+                        if (textToInsert && /^\S/.test(textToInsert) && !/^[.,:;!?\)]/.test(textToInsert.trim())) {
+                            textToInsert = ' ' + textToInsert;
+                        }
+                    }
+                }
+                editor.execCommand('mceInsertContent', false, textToInsert);
+            }
+
+            const startRecording = async () => {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = (event) => audioChunks.push(event.data);
+
+                    mediaRecorder.onstop = async () => {
+                        statusDiv.textContent = 'Transcribiendo...';
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const punctuate = punctuationToggle.checked;
+                        
+                        try {
+                            const response = await fetch(`/api/transcribe?punctuate=${punctuate}`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'audio/webm' },
+                                body: audioBlob
+                            });
+
+                            if (!response.ok) throw new Error(`Error del servidor: ${response.statusText}`);
+                            
+                            const data = await response.json();
+                            if (data.transcript) {
+                                const processedText = processTranscript(data.transcript);
+                                insertTextWithSmartSpacing(processedText);
+                            }
+                        } catch (err) {
+                            console.error("Error al transcribir:", err);
+                            statusDiv.textContent = 'Error';
+                        } finally {
+                            statusDiv.textContent = 'Listo';
+                        }
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    micButton.classList.add('blinking');
+                    statusDiv.textContent = 'Grabando...';
+                } catch (err) {
+                    console.error("Error al acceder al micrófono:", err);
+                    statusDiv.textContent = 'Error Micrófono';
+                    isRecording = false;
+                }
+            };
+
+            const stopRecording = () => {
+                if (mediaRecorder && isRecording) {
+                    mediaRecorder.stop();
+                    isRecording = false;
+                    micButton.classList.remove('blinking');
+                    statusDiv.textContent = 'Procesando...';
+                }
+            };
+
+            // Asignamos la función a la variable global.
+            toggleListening = () => {
+                if (isRecording) {
+                    stopRecording();
+                } else {
+                    startRecording();
+                }
+            };
+
+            micButton.addEventListener('click', toggleListening);
+        });
     </script>
 </body>
 </html>
