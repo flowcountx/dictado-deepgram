@@ -15,15 +15,19 @@ app.get('/', (req, res) => {
 
 // Endpoint para la transcripción
 app.post('/api/transcribe', async (req, res) => {
-    console.log("LOG: Recibida petición de transcripción.");
+    // --- CAMBIO CRÍTICO AQUÍ ---
+    // Leemos la opción de puntuación desde la URL (ej: /api/transcribe?punctuate=true)
+    const punctuate = req.query.punctuate === 'true';
+    
+    console.log(`LOG: Recibida petición de transcripción. Puntuación automática: ${punctuate}`);
+    
     try {
-        // --- CAMBIO CRÍTICO AQUÍ ---
         const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
             req.body, // El buffer de audio
             {
                 model: 'nova-3',
                 language: 'es',
-                smart_format: true // 1. Reactivado para obtener puntuación automática.
+                smart_format: punctuate // Usamos la opción enviada por el cliente
             }
         );
 
