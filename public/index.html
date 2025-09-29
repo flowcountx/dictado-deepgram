@@ -48,7 +48,7 @@
         <div class="controls">
             <div class="controls-section controls-left">
                 <label class="punctuation-toggle">
-                    <input type="checkbox" id="punctuation-toggle" checked>
+                    <input type="checkbox" id="punctuation-toggle">
                     Puntuación Automática
                 </label>
             </div>
@@ -72,8 +72,10 @@
         let audioChunks = [];
         let toggleListening;
 
-        const savedPunctuationState = localStorage.getItem('punctuationEnabled') !== 'false';
-        punctuationToggle.checked = savedPunctuationState;
+        // --- CAMBIO CRÍTICO AQUÍ: Default a desmarcado ---
+        // Cargar y guardar el estado del selector de puntuación
+        const savedPunctuationState = localStorage.getItem('punctuationEnabled') === 'true';
+        punctuationToggle.checked = savedPuncuationState;
         punctuationToggle.addEventListener('change', () => {
             localStorage.setItem('punctuationEnabled', punctuationToggle.checked);
         });
@@ -89,12 +91,6 @@
             if (!text) return "";
             
             let processedText = text.trim();
-            const punctuationEnabled = punctuationToggle.checked;
-            
-            // Si la puntuación está desactivada, pasamos el texto a minúsculas
-            if (!punctuationEnabled) {
-                processedText = processedText.toLowerCase();
-            }
             
             // Reemplazar comandos de voz siempre
             Object.entries(defaultCommandDictionary).forEach(([command, replacement]) => {
@@ -103,7 +99,7 @@
             });
             
             // Si la puntuación está activada, borramos el punto final
-            if (punctuationEnabled && processedText.endsWith('.')) {
+            if (punctuationToggle.checked && processedText.endsWith('.')) {
                 processedText = processedText.slice(0, -1);
             }
 
@@ -115,13 +111,17 @@
             const trimmedTextBefore = textBefore.trim();
             const lastSignificantChar = trimmedTextBefore.slice(-1);
             
-            if (!trimmedTextBefore || ['.', '?', '!'].includes(lastSignificantChar)) {
-                if (processedText) {
-                    processedText = processedText.charAt(0).toUpperCase() + processedText.slice(1);
-                }
+            // Comprobamos si el contexto requiere una mayúscula.
+            const needsCapital = !trimmedTextBefore || ['.', '?', '!'].includes(lastSignificantChar);
+
+            if (needsCapital) {
+                // Si se necesita, nos aseguramos de que la primera letra sea mayúscula.
+                processedText = processedText.charAt(0).toUpperCase() + processedText.slice(1);
+            } else {
+                // Si NO se necesita, forzamos a que la primera letra sea minúscula.
+                processedText = processedText.charAt(0).toLowerCase() + processedText.slice(1);
             }
             
-            // --- CORRECCIÓN DE ESPACIO EN COMAS ---
             // Limpiar el espacio antes de los signos de puntuación.
             processedText = processedText.replace(/\s+([.,:;!?\)])/g, '$1');
             
