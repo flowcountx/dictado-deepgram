@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dictado por voz a Transcriptor IA 2.0</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='https://cdn.tiny.cloud/1/8m4azy39b6j8rucm42gn657dkqz12lszz8hr1yb9h5j5rzzq/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23dcdcdc' d='M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z'%3E%3C/path%E3E%3C/svg%3E">
+    <script src="https://cdn.tiny.cloud/1/8m4azy39b6j8rucm42gn657dkqz12lszz8hr1yb9h5j5rzzq/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
     <style>
         :root {
             --bg-color: #1e1e1e; --surface-color: #2d2d2d; --primary-text-color: #dcdcdc; 
@@ -19,10 +20,7 @@
             width: 90%; max-width: 900px; margin: 20px auto; background-color: var(--surface-color); padding: 25px;
             border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); border: 1px solid var(--border-color);
         }
-        .main-title {
-            text-align: center;
-            color: var(--title-red-color);
-        }
+        .main-title { text-align: center; color: var(--title-red-color); }
         .instructions { text-align: center; color: var(--secondary-text-color); margin-bottom: 20px; font-style: italic; }
         .controls {
             display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
@@ -34,10 +32,33 @@
             background: none; border: 1px solid var(--border-color); width: 50px; height: 50px;
             border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer;
         }
-        #micButton.blinking { border-color: var(--record-color); }
-        #micButton.blinking svg { fill: var(--record-color); }
+        #micButton.blinking { border-color: var(--record-color); } #micButton.blinking svg { fill: var(--record-color); }
         #status { font-weight: bold; }
         .punctuation-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+
+        /* --- ESTILOS DEL DICCIONARIO --- */
+        #dictionary-section { margin-top: 30px; border-top: 1px solid var(--border-color); padding-top: 15px; }
+        #toggle-dictionary {
+            width: 100%; background: none; border: none; color: var(--primary-text-color);
+            padding: 10px; font-size: 1.1em; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;
+        }
+        #toggle-dictionary svg { width: 24px; height: 24px; fill: var(--primary-text-color); flex-shrink: 0; }
+        #dictionary-content { padding: 20px; background-color: rgba(0,0,0,0.2); border-radius: 6px; margin-top: 10px; }
+        #dictionary-content.hidden { display: none; }
+        .dictionary-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-top: 15px; }
+        .dictionary-list { list-style: none; padding: 0; margin: 0; max-height: 250px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px; padding: 5px; }
+        .dictionary-list li { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--border-color); }
+        .dictionary-list li:last-child { border-bottom: none; }
+        .dictionary-list li .command-phrase { color: #a5c9ff; }
+        .dictionary-list li .command-output { font-style: italic; color: #a0a0a0; }
+        .dictionary-actions button { background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--primary-text-color); padding: 3px 8px; cursor: pointer; margin-left: 5px; border-radius: 3px; }
+        #add-command-form { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; }
+        #add-command-form input { flex-grow: 1; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--primary-text-color); padding: 8px; border-radius: 4px; }
+        #add-command-btn { background-color: #4a6e96; border: 1px solid #6a8eb6; color: #fff; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
+        .dictionary-io { display: flex; gap: 10px; margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 20px; }
+        .dict-button { background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--primary-text-color); padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+        #drop-zone { border: 2px dashed var(--border-color); padding: 20px; text-align: center; color: var(--secondary-text-color); transition: background-color 0.3s; flex-grow: 1; border-radius: 4px; }
+        #drop-zone.drag-over { background-color: #4a6e96; }
     </style>
 </head>
 <body>
@@ -59,33 +80,48 @@
             <div class="controls-section controls-right"><div id="status">Listo</div></div>
         </div>
         <textarea id="editor"></textarea>
+        <!-- --- SECCIÓN DEL DICCIONARIO AÑADIDA --- -->
+        <div id="dictionary-section">
+            <button id="toggle-dictionary"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/></svg>Gestionar Diccionario</button>
+            <div id="dictionary-content" class="hidden">
+                <h3>Añadir Nuevo Comando</h3>
+                <form id="add-command-form" onsubmit="return false;">
+                    <input type="text" id="voice-command" placeholder="Frase de Voz (ej: nueva línea)" required>
+                    <input type="text" id="text-output" placeholder="Texto de Salida (ej: <br>)" required>
+                    <button id="add-command-btn" type="submit">Añadir</button>
+                </form>
+                <div class="dictionary-columns">
+                    <div>
+                        <h3>Comandos Personalizados</h3>
+                        <ul id="custom-commands-list" class="dictionary-list"></ul>
+                    </div>
+                    <div>
+                        <h3>Comandos por Defecto</h3>
+                        <ul id="default-commands-list" class="dictionary-list"></ul>
+                    </div>
+                </div>
+                <div class="dictionary-io">
+                    <button id="export-btn" class="dict-button">Exportar</button>
+                    <button id="import-btn" class="dict-button">Importar</button>
+                    <div id="drop-zone">O arrastra y suelta un archivo .json</div>
+                </div>
+                <input type="file" id="import-file" accept=".json" style="display: none;">
+            </div>
+        </div>
     </div>
     <script>
-        // Declaramos la variable 'toggleListening' en un scope global para que TinyMCE pueda encontrarla.
         let toggleListening;
 
-        // --- INICIALIZACIÓN DE TINYMCE (FUERA DEL DOMCONTENTLOADED) ---
-        // Esto asegura que el editor se renderice correctamente en cuanto la página carga.
         const savedHeight = localStorage.getItem('editorHeight') || 550;
         tinymce.init({
             selector: '#editor',
             plugins: 'lists link image table code help wordcount autosave',
             toolbar: 'undo redo | blocks | bold italic removeformat | fontfamily fontsize | forecolor backcolor | alignleft aligncenter alignright | bullist numlist | link image',
-            height: parseInt(savedHeight),
-            resize: 'vertical',
-            skin: 'oxide-dark',
-            content_css: 'dark',
-            language: 'es',
+            height: parseInt(savedHeight), resize: 'vertical', skin: 'oxide-dark', content_css: 'dark', language: 'es',
             content_style: "body { font-family: 'Arial Black', sans-serif; font-size: 14pt; }",
             setup: function (editor) {
                 editor.on('keydown', (event) => {
-                    if (event.key === 'Escape') {
-                        event.preventDefault();
-                        // La función 'toggleListening' será definida más abajo, pero estará disponible aquí cuando se necesite.
-                        if (toggleListening) {
-                            toggleListening();
-                        }
-                    }
+                    if (event.key === 'Escape') { event.preventDefault(); if (toggleListening) toggleListening(); }
                 });
                 editor.on('init', () => {
                     editor.getBody().setAttribute('spellcheck', 'true');
@@ -97,8 +133,6 @@
             }
         });
 
-        // --- LÓGICA DE LA APLICACIÓN (DENTRO DEL DOMCONTENTLOADED) ---
-        // Esto asegura que todo el HTML está cargado antes de intentar manipularlo.
         window.addEventListener('DOMContentLoaded', () => {
             const micButton = document.getElementById('micButton');
             const statusDiv = document.getElementById('status');
@@ -114,19 +148,46 @@
                 localStorage.setItem('punctuationEnabled', punctuationToggle.checked);
             });
 
+            // --- LÓGICA DEL DICCIONARIO REINTEGRADA ---
             const defaultCommandDictionary = {
                 'punto': '. ', 'coma': ', ', 'dos puntos': ': ', 'punto y coma': '; ',
                 'signo de exclamación': '! ', 'signo de exclamación invertido': '¡',
                 'signo de interrogación': '? ', 'signo de interrogación invertido': '¿',
                 'nueva línea': '<br>', 'nuevo párrafo': '<p></p>'
             };
+            let customCommands = {}; 
+            let fullCommandDictionary = {};
+
+            const loadCustomCommands = () => localStorage.getItem('customCommands') ? JSON.parse(localStorage.getItem('customCommands')) : {};
+            const saveCustomCommands = () => { localStorage.setItem('customCommands', JSON.stringify(customCommands)); updateFullDictionary(); };
+            const updateFullDictionary = () => { fullCommandDictionary = { ...customCommands, ...defaultCommandDictionary }; };
+            
+            const renderDictionary = () => {
+                const customList = document.getElementById('custom-commands-list'); 
+                const defaultList = document.getElementById('default-commands-list');
+                customList.innerHTML = ''; defaultList.innerHTML = '';
+                for (const command in customCommands) {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<div><span class="command-phrase">${command}</span> &#8594; <span class="command-output">${customCommands[command]}</span></div><div class="dictionary-actions"><button class="edit-btn" data-command="${command}">Editar</button><button class="delete-btn" data-command="${command}">Eliminar</button></div>`;
+                    customList.appendChild(li);
+                }
+                for (const command in defaultCommandDictionary) {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<div><span class="command-phrase">${command}</span> &#8594; <span class="command-output">${defaultCommandDictionary[command]}</span></div>`;
+                    defaultList.appendChild(li);
+                }
+            };
+            // Cargar y renderizar el diccionario al inicio
+            customCommands = loadCustomCommands();
+            updateFullDictionary();
+            renderDictionary();
 
             function processTranscript(text) {
                 if (!text) return "";
-                
                 let processedText = text.trim();
                 
-                Object.entries(defaultCommandDictionary).forEach(([command, replacement]) => {
+                // Reemplazar comandos de voz siempre
+                Object.entries(fullCommandDictionary).forEach(([command, replacement]) => {
                     const regex = new RegExp(`\\b${command}\\b`, 'gi');
                     processedText = processedText.replace(regex, replacement);
                 });
@@ -140,7 +201,6 @@
                 const textBefore = rng.startContainer.textContent.substring(0, rng.startOffset);
                 const trimmedTextBefore = textBefore.trim();
                 const lastSignificantChar = trimmedTextBefore.slice(-1);
-                
                 const needsCapital = !trimmedTextBefore || ['.', '?', '!'].includes(lastSignificantChar);
 
                 if (needsCapital) {
@@ -170,28 +230,19 @@
                 editor.execCommand('mceInsertContent', false, textToInsert);
             }
 
-            const startRecording = async () => {
+            const startRecording = async () => { /* ... (sin cambios) ... */
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     mediaRecorder = new MediaRecorder(stream);
                     audioChunks = [];
-
                     mediaRecorder.ondataavailable = (event) => audioChunks.push(event.data);
-
                     mediaRecorder.onstop = async () => {
                         statusDiv.textContent = 'Transcribiendo...';
                         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                         const punctuate = punctuationToggle.checked;
-                        
                         try {
-                            const response = await fetch(`/api/transcribe?punctuate=${punctuate}`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'audio/webm' },
-                                body: audioBlob
-                            });
-
+                            const response = await fetch(`/api/transcribe?punctuate=${punctuate}`, { method: 'POST', headers: { 'Content-Type': 'audio/webm' }, body: audioBlob });
                             if (!response.ok) throw new Error(`Error del servidor: ${response.statusText}`);
-                            
                             const data = await response.json();
                             if (data.transcript) {
                                 const processedText = processTranscript(data.transcript);
@@ -204,7 +255,6 @@
                             statusDiv.textContent = 'Listo';
                         }
                     };
-
                     mediaRecorder.start();
                     isRecording = true;
                     micButton.classList.add('blinking');
@@ -215,8 +265,8 @@
                     isRecording = false;
                 }
             };
-
-            const stopRecording = () => {
+            
+            const stopRecording = () => { /* ... (sin cambios) ... */
                 if (mediaRecorder && isRecording) {
                     mediaRecorder.stop();
                     isRecording = false;
@@ -225,16 +275,96 @@
                 }
             };
 
-            // Asignamos la función a la variable global.
             toggleListening = () => {
-                if (isRecording) {
-                    stopRecording();
-                } else {
-                    startRecording();
-                }
+                if (isRecording) { stopRecording(); } else { startRecording(); }
             };
 
             micButton.addEventListener('click', toggleListening);
+
+            // --- EVENT LISTENERS DEL DICCIONARIO ---
+            const toggleBtn = document.getElementById('toggle-dictionary');
+            const dictContent = document.getElementById('dictionary-content');
+            const addForm = document.getElementById('add-command-form');
+            const voiceInput = document.getElementById('voice-command');
+            const outputInput = document.getElementById('text-output');
+            const customList = document.getElementById('custom-commands-list');
+            
+            toggleBtn.addEventListener('click', () => dictContent.classList.toggle('hidden'));
+            
+            addForm.addEventListener('submit', () => {
+                const voice = voiceInput.value.trim().toLowerCase();
+                const output = outputInput.value;
+                if (voice && output) {
+                    customCommands[voice] = output;
+                    saveCustomCommands();
+                    renderDictionary();
+                    voiceInput.value = '';
+                    outputInput.value = '';
+                }
+            });
+            
+            customList.addEventListener('click', (e) => {
+                const command = e.target.dataset.command;
+                if (!command) return;
+                
+                if (e.target.classList.contains('delete-btn')) {
+                    if (confirm(`¿Seguro que quieres eliminar el comando "${command}"?`)) {
+                        delete customCommands[command];
+                        saveCustomCommands();
+                        renderDictionary();
+                    }
+                } else if (e.target.classList.contains('edit-btn')) {
+                    voiceInput.value = command;
+                    outputInput.value = customCommands[command];
+                    delete customCommands[command];
+                    saveCustomCommands();
+                }
+            });
+
+            const exportBtn = document.getElementById('export-btn');
+            const importBtn = document.getElementById('import-btn');
+            const importFile = document.getElementById('import-file');
+            const dropZone = document.getElementById('drop-zone');
+
+            exportBtn.addEventListener('click', () => {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(customCommands, null, 2));
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", "diccionario.json");
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+            });
+
+            const handleFile = (file) => {
+                if (file && file.type === "application/json") {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const importedCommands = JSON.parse(event.target.result);
+                            Object.assign(customCommands, importedCommands);
+                            saveCustomCommands();
+                            renderDictionary();
+                            alert('Diccionario importado con éxito.');
+                        } catch (err) {
+                            alert('Error: El archivo no es un JSON válido.');
+                        }
+                    };
+                    reader.readAsText(file);
+                } else {
+                    alert('Por favor, selecciona un archivo .json válido.');
+                }
+            };
+            
+            importBtn.addEventListener('click', () => importFile.click());
+            importFile.addEventListener('change', (e) => handleFile(e.target.files[0]));
+            dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+            dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('drag-over');
+                if (e.dataTransfer.files.length) { handleFile(e.dataTransfer.files[0]); }
+            });
         });
     </script>
 </body>
