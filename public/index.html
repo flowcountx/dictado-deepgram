@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dictado por voz a Transcriptor IA 2.0</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23dcdcdc' d='M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z'%3E%3C/path%E3E%3C/svg%3E">
-    <script src="https://cdn.tiny.cloud/1/8m4azy39b6j8rucm42gn657dkqz12lszz8hr1yb9h5j5rzzq/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+    <script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
     <style>
         :root {
             --bg-color: #1e1e1e; --surface-color: #2d2d2d; --primary-text-color: #dcdcdc; 
             --secondary-text-color: #a0a0a0; --border-color: #444; --record-color: #dc3545;
-            --title-red-color: #CF6679; /* Un rojo sutil para modo oscuro */
+            --title-red-color: #CF6679;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -72,7 +72,6 @@
         let audioChunks = [];
         let toggleListening;
 
-        // Cargar y guardar el estado del selector de puntuación
         const savedPunctuationState = localStorage.getItem('punctuationEnabled') !== 'false';
         punctuationToggle.checked = savedPunctuationState;
         punctuationToggle.addEventListener('change', () => {
@@ -92,21 +91,9 @@
             let processedText = text.trim();
             const punctuationEnabled = punctuationToggle.checked;
             
-            // Si la puntuación está desactivada, pasamos el texto a minúsculas para aplicar nuestras reglas
+            // Si la puntuación está desactivada, pasamos el texto a minúsculas
             if (!punctuationEnabled) {
                 processedText = processedText.toLowerCase();
-                
-                const editor = tinymce.activeEditor;
-                const rng = editor.selection.getRng();
-                const textBefore = rng.startContainer.textContent.substring(0, rng.startOffset);
-                const trimmedTextBefore = textBefore.trim();
-                const lastSignificantChar = trimmedTextBefore.slice(-1);
-
-                if (!trimmedTextBefore || ['.', '?', '!'].includes(lastSignificantChar)) {
-                    if (processedText) {
-                        processedText = processedText.charAt(0).toUpperCase() + processedText.slice(1);
-                    }
-                }
             }
             
             // Reemplazar comandos de voz siempre
@@ -119,6 +106,24 @@
             if (punctuationEnabled && processedText.endsWith('.')) {
                 processedText = processedText.slice(0, -1);
             }
+
+            // --- CORRECCIÓN DE MAYÚSCULAS ---
+            // Aplicar nuestra lógica de capitalización en AMBOS modos para un comportamiento consistente.
+            const editor = tinymce.activeEditor;
+            const rng = editor.selection.getRng();
+            const textBefore = rng.startContainer.textContent.substring(0, rng.startOffset);
+            const trimmedTextBefore = textBefore.trim();
+            const lastSignificantChar = trimmedTextBefore.slice(-1);
+            
+            if (!trimmedTextBefore || ['.', '?', '!'].includes(lastSignificantChar)) {
+                if (processedText) {
+                    processedText = processedText.charAt(0).toUpperCase() + processedText.slice(1);
+                }
+            }
+            
+            // --- CORRECCIÓN DE ESPACIO EN COMAS ---
+            // Limpiar el espacio antes de los signos de puntuación.
+            processedText = processedText.replace(/\s+([.,:;!?\)])/g, '$1');
             
             return processedText;
         }
