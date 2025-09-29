@@ -52,6 +52,134 @@
         <textarea id="editor"></textarea>
     </div>
     <script>
+    window.addEventListener('DOMContentLoaded', () => {
+        const micButton = document.getElementById('micButton');
+        const statusDiv = document.getElementById('status');
+        
+        let isRecording = false;
+        let mediaRecorder;
+        let audioChunks = [];
+        let toggleListening; // Declarada aquí para estar en el scope
+
+        const defaultCommandDictionary = {
+            'punto': '. ', 'coma': ', ', 'dos puntos': ': ', 'punto y coma': '; ',
+            'signo de exclamación': '! ', 'signo de exclamación invertido': '¡',
+            'signo de interrogación': '? ', 'signo de interrogación invertido': '¿',
+            'nueva línea': '<br>', 'nuevo párrafo': '<p></p>'
+        };
+
+        function processTranscript(text) {
+            if (!text) return "";
+            const editor = tinymce.activeEditor;
+            const rng = editor.selection.getRng();
+            const textBefore = rng.startContainer.textContent.substring(0, rng.startOffset);
+            const trimmedTextBefore = textBefore.trim();
+            const lastSignificantChar = trimmedTextBefore.slice(-1);
+            
+            let processedText = text.trim(); // No lo pasamos a minúsculas, confiamos en Deepgram
+            
+            Object.entries(defaultCommandDictionary).forEach(([command, replacement]) => {
+                const regex = new RegExp(`\\b${command}\\b`, 'gi');
+                processedText = processedText.replace(regex, replacement);
+            });
+            
+            // Si la transcripción empieza sin mayúscula y el texto anterior lo requiere, la añadimos.
+            if (!trimmedTextBefore || ['.', '?', '!'].includes(lastSignificantChar)) {
+                if (processedText && processedText.charAt(0) === processedText.charAt(0).toLowerCase()) {
+                    processedText = processedText.charAt(0).toUpperCase() + processedText.slice(1);
+                }
+            }
+            
+            // --- CAMBIO CRÍTICO AQUÍ: Eliminar el punto final ---
+            if (processedText.endsWith('.')) {
+                processedText = processedText.slice(0, -1);
+            }
+            
+            return processedText;
+        }
+
+        function insertTextWithSmartSpacing(text) {
+            const editor = tinymce.activeEditor;
+            const rng = editor.selection.getRng();
+            let textToInsert = text;
+            if (rng.collapsed) {
+                const textBefore = rng.startContainer.textContent.substring(0, rng.startOffset);
+                const lastChar = textBefore.slice(-1);
+                // Añadir espacio si no hay uno y no es un signo de puntuación
+                if (lastChar && /\S/.test(lastChar) && !['(', '¡', '¿'].includes(lastChar)) {
+                    if (textToInsert && /^\S/.test(textToInsert) && !/^[.,:;!?\)]/.test(textToInsert.trim())) {
+                        textToInsert = ' ' + textToInsert;
+                    }
+                }
+            }
+            editor.execCommand('mceInsertContent', false, textToInsert);
+        }
+
+        const startRecording = async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = []; // Limpiar chunks antes de empezar
+
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    statusDiv.textContent = 'Transcribiendo...';
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    
+                    try {
+                        const response = await fetch('/api/transcribe', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'audio/webm' },
+                            body: audioBlob
+                        });
+
+                        if (!response.ok) throw new Error(`Error del servidor: ${response.statusText}`);
+                        
+                        const data = await response.json();
+                        if (data.transcript) {
+                            const processedText = processTranscript(data.transcript);
+                            insertTextWithSmartSpacing(processedText);
+                        }
+                    } catch (err) {
+                        console.error("Error al transcribir:", err);
+                        statusDiv.textContent = 'Error';
+                    } finally {
+                        statusDiv.textContent = 'Listo';
+                    }
+                };
+
+                mediaRecorder.start();
+                isRecording = true;
+                micButton.classList.add('blinking');
+                statusDiv.textContent = 'Grabando...';
+            } catch (err) {
+                console.error("Error al acceder al micrófono:", err);
+                statusDiv.textContent = 'Error Micrófono';
+                isRecording = false; // Resetear estado en caso de error
+            }
+        };
+
+        const stopRecording = () => {
+            if (mediaRecorder && isRecording) {
+                mediaRecorder.stop();
+                isRecording = false;
+                micButton.classList.remove('blinking');
+                statusDiv.textContent = 'Procesando...';
+            }
+        };
+
+        toggleListening = () => { // Asignamos la función aquí
+            if (isRecording) {
+                stopRecording();
+            } else {
+                startRecording();
+            }
+        };
+
+        // --- CAMBIO CRÍTICO AQUÍ: Inicializamos TinyMCE DENTRO del DOMContentLoaded ---
         const savedHeight = localStorage.getItem('editorHeight') || 550;
         tinymce.init({
             selector: '#editor',
@@ -64,7 +192,7 @@
                 editor.on('keydown', (event) => {
                     if (event.key === 'Escape') {
                         event.preventDefault();
-                        toggleListening();
+                        toggleListening(); // Ahora 'toggleListening' está garantizado que existe.
                     }
                 });
                 editor.on('init', () => {
@@ -77,135 +205,8 @@
             }
         });
 
-        window.addEventListener('DOMContentLoaded', () => {
-            const micButton = document.getElementById('micButton');
-            const statusDiv = document.getElementById('status');
-            
-            let isRecording = false;
-            let mediaRecorder;
-            let audioChunks = [];
-
-            const defaultCommandDictionary = {
-                'punto': '. ', 'coma': ', ', 'dos puntos': ': ', 'punto y coma': '; ',
-                'signo de exclamación': '! ', 'signo de exclamación invertido': '¡',
-                'signo de interrogación': '? ', 'signo de interrogación invertido': '¿',
-                'nueva línea': '<br>', 'nuevo párrafo': '<p></p>'
-            };
-
-            function processTranscript(text) {
-                if (!text) return "";
-                const editor = tinymce.activeEditor;
-                const rng = editor.selection.getRng();
-                const textBefore = rng.startContainer.textContent.substring(0, rng.startOffset);
-                const trimmedTextBefore = textBefore.trim();
-                const lastSignificantChar = trimmedTextBefore.slice(-1);
-                
-                let processedText = text.trim().toLowerCase();
-                
-                Object.entries(defaultCommandDictionary).forEach(([command, replacement]) => {
-                    const regex = new RegExp(`\\b${command}\\b`, 'gi');
-                    processedText = processedText.replace(regex, replacement);
-                });
-                
-                if (!trimmedTextBefore || ['.', '?', '!'].includes(lastSignificantChar)) {
-                    if (processedText) {
-                        processedText = processedText.charAt(0).toUpperCase() + processedText.slice(1);
-                    }
-                }
-                
-                return processedText;
-            }
-
-            function insertTextWithSmartSpacing(text) {
-                const editor = tinymce.activeEditor;
-                const rng = editor.selection.getRng();
-                let textToInsert = text;
-                if (rng.collapsed) {
-                    const textBefore = rng.startContainer.textContent.substring(0, rng.startOffset);
-                    const lastChar = textBefore.slice(-1);
-                    if (lastChar && lastChar.trim() !== '' && !['(', '¡', '¿'].includes(lastChar)) {
-                        if (textToInsert && !/^\s/.test(textToInsert) && !/^[.,:;!?\)]/.test(textToInsert.trim())) {
-                            textToInsert = ' ' + textToInsert;
-                        }
-                    }
-                }
-                editor.execCommand('mceInsertContent', false, textToInsert);
-            }
-
-            const startRecording = async () => {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    mediaRecorder = new MediaRecorder(stream);
-
-                    mediaRecorder.ondataavailable = (event) => {
-                        audioChunks.push(event.data);
-                    };
-
-                    mediaRecorder.onstop = async () => {
-                        statusDiv.textContent = 'Transcribiendo...';
-                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                        
-                        try {
-                            const response = await fetch('/api/transcribe', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'audio/webm' },
-                                body: audioBlob
-                            });
-
-                            if (!response.ok) throw new Error(`Error del servidor: ${response.statusText}`);
-                            
-                            const data = await response.json();
-                            if (data.transcript) {
-                                const processedText = processTranscript(data.transcript);
-                                insertTextWithSmartSpacing(processedText);
-                            }
-                        } catch (err) {
-                            console.error("Error al transcribir:", err);
-                            statusDiv.textContent = 'Error';
-                        } finally {
-                            statusDiv.textContent = 'Listo';
-                        }
-                    };
-
-                    audioChunks = [];
-                    mediaRecorder.start();
-                    isRecording = true;
-                    micButton.classList.add('blinking');
-                    statusDiv.textContent = 'Grabando...';
-                } catch (err) {
-                    console.error("Error al acceder al micrófono:", err);
-                    statusDiv.textContent = 'Error Micrófono';
-                    isRecording = false;
-                }
-            };
-
-            const stopRecording = () => {
-                if (mediaRecorder && isRecording) {
-                    mediaRecorder.stop();
-                    isRecording = false;
-                    micButton.classList.remove('blinking');
-                    statusDiv.textContent = 'Procesando...';
-                }
-            };
-
-            const toggleListening = () => {
-                if (isRecording) {
-                    stopRecording();
-                } else {
-                    startRecording();
-                }
-            };
-
-            micButton.addEventListener('click', toggleListening);
-            
-            // Este es un respaldo adicional para la tecla Esc por si el foco no está en el editor.
-            document.addEventListener('keydown', (event) => {
-                if (event.key === 'Escape' && !tinymce.activeEditor.hasFocus()) {
-                    event.preventDefault();
-                    toggleListening();
-                }
-            });
-        });
+        micButton.addEventListener('click', toggleListening);
+    });
     </script>
 </body>
 </html>
