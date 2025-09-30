@@ -4,14 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dictado por voz a Transcriptor IA 2.0</title>
-    <!-- --- CAMBIO ÚNICO AQUÍ: Nuevo Favicon --- -->
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23CF6679' d='M12 12c2.21 0 4-1.79 4-4V4c0-2.21-1.79-4-4-4S8 1.79 8 4v4c0 2.21 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E">
     <script src="https://cdn.tiny.cloud/1/8m4azy39b6j8rucm42gn657dkqz12lszz8hr1yb9h5j5rzzq/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
     <style>
         :root {
             --bg-color: #1e1e1e; --surface-color: #2d2d2d; --primary-text-color: #dcdcdc; 
             --secondary-text-color: #a0a0a0; --border-color: #444; --record-color: #dc3545;
-            --title-red-color: #CF6679;
+            --title-red-color: #CF6679; --button-danger-color: #a13a45;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -37,7 +36,6 @@
         #status { font-weight: bold; }
         .punctuation-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 
-        /* --- Estilos del Diccionario (Añadidos en la versión anterior) --- */
         #dictionary-section { margin-top: 30px; border-top: 1px solid var(--border-color); padding-top: 15px; }
         #toggle-dictionary {
             width: 100%; background: none; border: none; color: var(--primary-text-color);
@@ -52,6 +50,9 @@
         .dictionary-list li:last-child { border-bottom: none; }
         .dictionary-list li .command-phrase { color: #a5c9ff; }
         .dictionary-list li .command-output { font-style: italic; color: #a0a0a0; }
+        .dictionary-list li.disabled-command { color: #777; }
+        .dictionary-list li.disabled-command .command-phrase, .dictionary-list li.disabled-command .command-output { color: inherit; }
+        .default-command-label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
         .dictionary-actions button { background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--primary-text-color); padding: 3px 8px; cursor: pointer; margin-left: 5px; border-radius: 3px; }
         #add-command-form { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; }
         #add-command-form input { flex-grow: 1; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--primary-text-color); padding: 8px; border-radius: 4px; }
@@ -60,6 +61,9 @@
         .dict-button { background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--primary-text-color); padding: 8px 12px; border-radius: 4px; cursor: pointer; }
         #drop-zone { border: 2px dashed var(--border-color); padding: 20px; text-align: center; color: var(--secondary-text-color); transition: background-color 0.3s; flex-grow: 1; border-radius: 4px; }
         #drop-zone.drag-over { background-color: #4a6e96; }
+        .dict-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        #clear-custom-commands-btn { background-color: var(--button-danger-color); border: 1px solid var(--border-color); color: var(--primary-text-color); padding: 3px 10px; cursor: pointer; border-radius: 3px; font-size: 0.8em; }
+        #clear-custom-commands-btn:disabled { background-color: #555; cursor: not-allowed; color: #888; }
     </style>
 </head>
 <body>
@@ -92,7 +96,10 @@
                 </form>
                 <div class="dictionary-columns">
                     <div>
-                        <h3>Comandos Personalizados</h3>
+                        <div class="dict-header">
+                            <h3>Comandos Personalizados</h3>
+                            <button id="clear-custom-commands-btn">Vaciar</button>
+                        </div>
                         <ul id="custom-commands-list" class="dictionary-list"></ul>
                     </div>
                     <div>
@@ -119,6 +126,7 @@
             toolbar: 'undo redo | blocks | bold italic removeformat | fontfamily fontsize | forecolor backcolor | alignleft aligncenter alignright | bullist numlist | link image',
             height: parseInt(savedHeight), resize: 'vertical', skin: 'oxide-dark', content_css: 'dark', language: 'es',
             content_style: "body { font-family: 'Arial Black', sans-serif; font-size: 14pt; }",
+            contextmenu: false, // <-- MEJORA 2: Desactiva el menú contextual de TinyMCE
             setup: function (editor) {
                 editor.on('keydown', (event) => {
                     if (event.key === 'Escape') { event.preventDefault(); if (toggleListening) toggleListening(); }
@@ -156,27 +164,68 @@
             };
             let customCommands = {}; 
             let fullCommandDictionary = {};
+            let disabledDefaultCommands = new Set(); // <-- MEJORA 3: Almacena comandos desactivados
 
             const loadCustomCommands = () => localStorage.getItem('customCommands') ? JSON.parse(localStorage.getItem('customCommands')) : {};
             const saveCustomCommands = () => { localStorage.setItem('customCommands', JSON.stringify(customCommands)); updateFullDictionary(); };
-            const updateFullDictionary = () => { fullCommandDictionary = { ...customCommands, ...defaultCommandDictionary }; };
+            
+            // <-- INICIO MEJORA 3: Funciones para guardar/cargar comandos desactivados -->
+            const loadDisabledCommands = () => {
+                const disabled = localStorage.getItem('disabledCommands');
+                disabledDefaultCommands = disabled ? new Set(JSON.parse(disabled)) : new Set();
+            };
+            const saveDisabledCommands = () => {
+                localStorage.setItem('disabledCommands', JSON.stringify([...disabledDefaultCommands]));
+                updateFullDictionary();
+            };
+            // <-- FIN MEJORA 3 -->
+
+            const updateFullDictionary = () => { 
+                const activeDefaults = Object.fromEntries(
+                    Object.entries(defaultCommandDictionary)
+                        .filter(([command]) => !disabledDefaultCommands.has(command))
+                );
+                fullCommandDictionary = { ...customCommands, ...activeDefaults }; 
+            };
             
             const renderDictionary = () => {
                 const customList = document.getElementById('custom-commands-list'); 
                 const defaultList = document.getElementById('default-commands-list');
+                const clearBtn = document.getElementById('clear-custom-commands-btn'); // <-- MEJORA 4
                 customList.innerHTML = ''; defaultList.innerHTML = '';
+                
+                // <-- MEJORA 4: Lógica para activar/desactivar botón de vaciado -->
+                const hasCustomCommands = Object.keys(customCommands).length > 0;
+                clearBtn.disabled = !hasCustomCommands;
+
                 for (const command in customCommands) {
                     const li = document.createElement('li');
                     li.innerHTML = `<div><span class="command-phrase">${command}</span> &#8594; <span class="command-output">${customCommands[command]}</span></div><div class="dictionary-actions"><button class="edit-btn" data-command="${command}">Editar</button><button class="delete-btn" data-command="${command}">Eliminar</button></div>`;
                     customList.appendChild(li);
                 }
+
+                // <-- INICIO MEJORA 3: Renderizado de comandos por defecto con checkboxes -->
                 for (const command in defaultCommandDictionary) {
                     const li = document.createElement('li');
-                    li.innerHTML = `<div><span class="command-phrase">${command}</span> &#8594; <span class="command-output">${defaultCommandDictionary[command]}</span></div>`;
+                    const isEnabled = !disabledDefaultCommands.has(command);
+                    if (!isEnabled) {
+                        li.classList.add('disabled-command');
+                    }
+                    li.innerHTML = `
+                        <label class="default-command-label">
+                            <input type="checkbox" data-command="${command}" ${isEnabled ? 'checked' : ''}>
+                            <div>
+                                <span class="command-phrase">${command}</span> &#8594; <span class="command-output">${defaultCommandDictionary[command]}</span>
+                            </div>
+                        </label>
+                    `;
                     defaultList.appendChild(li);
                 }
+                // <-- FIN MEJORA 3 -->
             };
+            
             customCommands = loadCustomCommands();
+            loadDisabledCommands(); // <-- MEJORA 3: Carga estado al iniciar
             updateFullDictionary();
             renderDictionary();
 
@@ -198,13 +247,17 @@
                 const textBefore = rng.startContainer.textContent.substring(0, rng.startOffset);
                 const trimmedTextBefore = textBefore.trim();
                 const lastSignificantChar = trimmedTextBefore.slice(-1);
-                const needsCapital = !trimmedTextBefore || ['.', '?', '!'].includes(lastSignificantChar);
+                
+                // <-- INICIO MEJORA 1: Lógica de mayúsculas mejorada -->
+                const capitalAfterListMarker = /(?:-\s*|\*\s*|\d+\)\s*)$/.test(textBefore);
+                const needsCapital = !trimmedTextBefore || ['.', '?', '!'].includes(lastSignificantChar) || capitalAfterListMarker;
 
                 if (needsCapital) {
                     processedText = processedText.charAt(0).toUpperCase() + processedText.slice(1);
                 } else {
                     processedText = processedText.charAt(0).toLowerCase() + processedText.slice(1);
                 }
+                // <-- FIN MEJORA 1 -->
                 
                 processedText = processedText.replace(/\s+([.,:;!?\)])/g, '$1');
                 
@@ -227,7 +280,13 @@
                 editor.execCommand('mceInsertContent', false, textToInsert);
             }
 
-            const startRecording = async () => {
+            const startRecording = async () => { /* Sin cambios en esta función */ };
+            const stopRecording = () => { /* Sin cambios en esta función */ };
+            toggleListening = () => { /* Sin cambios en esta función */ };
+            micButton.addEventListener('click', toggleListening);
+            
+            // Re-asignar las funciones start/stop para claridad, sin cambios en su código interno
+            const originalStartRecording = async () => {
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     mediaRecorder = new MediaRecorder(stream);
@@ -262,8 +321,7 @@
                     isRecording = false;
                 }
             };
-            
-            const stopRecording = () => {
+            const originalStopRecording = () => {
                 if (mediaRecorder && isRecording) {
                     mediaRecorder.stop();
                     isRecording = false;
@@ -271,12 +329,13 @@
                     statusDiv.textContent = 'Procesando...';
                 }
             };
-
+            startRecording = originalStartRecording;
+            stopRecording = originalStopRecording;
             toggleListening = () => {
                 if (isRecording) { stopRecording(); } else { startRecording(); }
             };
-
             micButton.addEventListener('click', toggleListening);
+
 
             const toggleBtn = document.getElementById('toggle-dictionary');
             const dictContent = document.getElementById('dictionary-content');
@@ -284,6 +343,7 @@
             const voiceInput = document.getElementById('voice-command');
             const outputInput = document.getElementById('text-output');
             const customList = document.getElementById('custom-commands-list');
+            const defaultList = document.getElementById('default-commands-list'); // <-- MEJORA 3
             
             toggleBtn.addEventListener('click', () => dictContent.classList.toggle('hidden'));
             
@@ -312,16 +372,46 @@
                 } else if (e.target.classList.contains('edit-btn')) {
                     voiceInput.value = command;
                     outputInput.value = customCommands[command];
-                    delete customCommands[command];
-                    saveCustomCommands();
+                    delete customCommands[command]; // Se elimina para volver a añadir al guardar
+                    saveCustomCommands(); // Se guarda el estado sin el comando a editar
+                    renderDictionary(); // Se actualiza la lista visualmente
+                    voiceInput.focus();
                 }
             });
+
+            // <-- INICIO MEJORA 3: Event listener para los checkboxes de comandos por defecto -->
+            defaultList.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const command = e.target.dataset.command;
+                    const isEnabled = e.target.checked;
+                    if (isEnabled) {
+                        disabledDefaultCommands.delete(command);
+                    } else {
+                        disabledDefaultCommands.add(command);
+                    }
+                    e.target.closest('li').classList.toggle('disabled-command', !isEnabled);
+                    saveDisabledCommands();
+                }
+            });
+            // <-- FIN MEJORA 3 -->
+
+            // <-- INICIO MEJORA 4: Event listener para el botón de vaciar -->
+            const clearBtn = document.getElementById('clear-custom-commands-btn');
+            clearBtn.addEventListener('click', () => {
+                if (confirm('¿Estás seguro de que quieres eliminar TODOS los comandos personalizados? Esta acción no se puede deshacer.')) {
+                    customCommands = {};
+                    saveCustomCommands();
+                    renderDictionary();
+                }
+            });
+            // <-- FIN MEJORA 4 -->
 
             const exportBtn = document.getElementById('export-btn');
             const importBtn = document.getElementById('import-btn');
             const importFile = document.getElementById('import-file');
             const dropZone = document.getElementById('drop-zone');
 
+            // --- Lógica de importación/exportación sin cambios ---
             exportBtn.addEventListener('click', () => {
                 const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(customCommands, null, 2));
                 const downloadAnchorNode = document.createElement('a');
