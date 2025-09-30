@@ -52,7 +52,7 @@
         .dictionary-list li .command-output { font-style: italic; color: #a0a0a0; }
         .dictionary-list li.disabled-command { color: #777; }
         .dictionary-list li.disabled-command .command-phrase, .dictionary-list li.disabled-command .command-output { color: inherit; }
-        .default-command-label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+        .default-command-label { display: flex; align-items: center; gap: 8px; cursor: pointer; flex-grow: 1; }
         .dictionary-actions button { background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--primary-text-color); padding: 3px 8px; cursor: pointer; margin-left: 5px; border-radius: 3px; }
         #add-command-form { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; }
         #add-command-form input { flex-grow: 1; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--primary-text-color); padding: 8px; border-radius: 4px; }
@@ -119,25 +119,35 @@
     <script>
         let toggleListening;
 
-        const savedHeight = localStorage.getItem('editorHeight') || 550;
         tinymce.init({
             selector: '#editor',
             plugins: 'lists link image table code help wordcount autosave',
             toolbar: 'undo redo | blocks | bold italic removeformat | fontfamily fontsize | forecolor backcolor | alignleft aligncenter alignright | bullist numlist | link image',
-            height: parseInt(savedHeight), resize: 'vertical', skin: 'oxide-dark', content_css: 'dark', language: 'es',
+            height: parseInt(localStorage.getItem('editorHeight') || 550),
+            resize: 'vertical',
+            skin: 'oxide-dark',
+            content_css: 'dark',
+            language: 'es',
             content_style: "body { font-family: 'Arial Black', sans-serif; font-size: 14pt; }",
-            contextmenu: false, // <-- MEJORA 2: Desactiva el menú contextual de TinyMCE
+            contextmenu: false,
             setup: function (editor) {
                 editor.on('keydown', (event) => {
-                    if (event.key === 'Escape') { event.preventDefault(); if (toggleListening) toggleListening(); }
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        if (toggleListening) toggleListening();
+                    }
                 });
                 editor.on('init', () => {
                     editor.getBody().setAttribute('spellcheck', 'true');
                     const savedContent = localStorage.getItem('tinymce-autosave-content');
-                    if (savedContent) { editor.setContent(savedContent); }
+                    if (savedContent) editor.setContent(savedContent);
                 });
-                editor.on('keyup change', () => { localStorage.setItem('tinymce-autosave-content', editor.getContent()); });
-                editor.on('ResizeEditor', () => { localStorage.setItem('editorHeight', editor.getContainer().clientHeight); });
+                editor.on('keyup change', () => {
+                    localStorage.setItem('tinymce-autosave-content', editor.getContent());
+                });
+                editor.on('ResizeEditor', () => {
+                    localStorage.setItem('editorHeight', editor.getContainer().clientHeight);
+                });
             }
         });
 
@@ -151,7 +161,7 @@
             let audioChunks = [];
 
             const savedPunctuationState = localStorage.getItem('punctuationEnabled') === 'true';
-            punctuationToggle.checked = savedPunctuationState;
+            punctuationToggle.checked = savedPuncuationState;
             punctuationToggle.addEventListener('change', () => {
                 localStorage.setItem('punctuationEnabled', punctuationToggle.checked);
             });
@@ -164,12 +174,11 @@
             };
             let customCommands = {}; 
             let fullCommandDictionary = {};
-            let disabledDefaultCommands = new Set(); // <-- MEJORA 3: Almacena comandos desactivados
+            let disabledDefaultCommands = new Set();
 
             const loadCustomCommands = () => localStorage.getItem('customCommands') ? JSON.parse(localStorage.getItem('customCommands')) : {};
             const saveCustomCommands = () => { localStorage.setItem('customCommands', JSON.stringify(customCommands)); updateFullDictionary(); };
             
-            // <-- INICIO MEJORA 3: Funciones para guardar/cargar comandos desactivados -->
             const loadDisabledCommands = () => {
                 const disabled = localStorage.getItem('disabledCommands');
                 disabledDefaultCommands = disabled ? new Set(JSON.parse(disabled)) : new Set();
@@ -178,7 +187,6 @@
                 localStorage.setItem('disabledCommands', JSON.stringify([...disabledDefaultCommands]));
                 updateFullDictionary();
             };
-            // <-- FIN MEJORA 3 -->
 
             const updateFullDictionary = () => { 
                 const activeDefaults = Object.fromEntries(
@@ -191,12 +199,10 @@
             const renderDictionary = () => {
                 const customList = document.getElementById('custom-commands-list'); 
                 const defaultList = document.getElementById('default-commands-list');
-                const clearBtn = document.getElementById('clear-custom-commands-btn'); // <-- MEJORA 4
+                const clearBtn = document.getElementById('clear-custom-commands-btn');
                 customList.innerHTML = ''; defaultList.innerHTML = '';
                 
-                // <-- MEJORA 4: Lógica para activar/desactivar botón de vaciado -->
-                const hasCustomCommands = Object.keys(customCommands).length > 0;
-                clearBtn.disabled = !hasCustomCommands;
+                clearBtn.disabled = Object.keys(customCommands).length === 0;
 
                 for (const command in customCommands) {
                     const li = document.createElement('li');
@@ -204,13 +210,10 @@
                     customList.appendChild(li);
                 }
 
-                // <-- INICIO MEJORA 3: Renderizado de comandos por defecto con checkboxes -->
                 for (const command in defaultCommandDictionary) {
                     const li = document.createElement('li');
                     const isEnabled = !disabledDefaultCommands.has(command);
-                    if (!isEnabled) {
-                        li.classList.add('disabled-command');
-                    }
+                    li.classList.toggle('disabled-command', !isEnabled);
                     li.innerHTML = `
                         <label class="default-command-label">
                             <input type="checkbox" data-command="${command}" ${isEnabled ? 'checked' : ''}>
@@ -221,11 +224,10 @@
                     `;
                     defaultList.appendChild(li);
                 }
-                // <-- FIN MEJORA 3 -->
             };
             
             customCommands = loadCustomCommands();
-            loadDisabledCommands(); // <-- MEJORA 3: Carga estado al iniciar
+            loadDisabledCommands();
             updateFullDictionary();
             renderDictionary();
 
@@ -248,7 +250,6 @@
                 const trimmedTextBefore = textBefore.trim();
                 const lastSignificantChar = trimmedTextBefore.slice(-1);
                 
-                // <-- INICIO MEJORA 1: Lógica de mayúsculas mejorada -->
                 const capitalAfterListMarker = /(?:-\s*|\*\s*|\d+\)\s*)$/.test(textBefore);
                 const needsCapital = !trimmedTextBefore || ['.', '?', '!'].includes(lastSignificantChar) || capitalAfterListMarker;
 
@@ -257,7 +258,6 @@
                 } else {
                     processedText = processedText.charAt(0).toLowerCase() + processedText.slice(1);
                 }
-                // <-- FIN MEJORA 1 -->
                 
                 processedText = processedText.replace(/\s+([.,:;!?\)])/g, '$1');
                 
@@ -279,14 +279,9 @@
                 }
                 editor.execCommand('mceInsertContent', false, textToInsert);
             }
-
-            const startRecording = async () => { /* Sin cambios en esta función */ };
-            const stopRecording = () => { /* Sin cambios en esta función */ };
-            toggleListening = () => { /* Sin cambios en esta función */ };
-            micButton.addEventListener('click', toggleListening);
             
-            // Re-asignar las funciones start/stop para claridad, sin cambios en su código interno
-            const originalStartRecording = async () => {
+            // --- INICIO DE CORRECCIÓN: Lógica de grabación reestructurada ---
+            const startRecording = async () => {
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     mediaRecorder = new MediaRecorder(stream);
@@ -297,7 +292,7 @@
                         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                         const punctuate = punctuationToggle.checked;
                         try {
-                            const response = await fetch(`/api/transcribe?punctuate=${punctuate}`, { method: 'POST', headers: { 'Content-Type': 'audio/webm' }, body: audioBlob });
+                            const response = await fetch(`/api/transcribe?punctuate=${punctuate}`, { method: 'POST', body: audioBlob });
                             if (!response.ok) throw new Error(`Error del servidor: ${response.statusText}`);
                             const data = await response.json();
                             if (data.transcript) {
@@ -321,7 +316,8 @@
                     isRecording = false;
                 }
             };
-            const originalStopRecording = () => {
+            
+            const stopRecording = () => {
                 if (mediaRecorder && isRecording) {
                     mediaRecorder.stop();
                     isRecording = false;
@@ -329,13 +325,17 @@
                     statusDiv.textContent = 'Procesando...';
                 }
             };
-            startRecording = originalStartRecording;
-            stopRecording = originalStopRecording;
-            toggleListening = () => {
-                if (isRecording) { stopRecording(); } else { startRecording(); }
-            };
-            micButton.addEventListener('click', toggleListening);
 
+            toggleListening = () => {
+                if (isRecording) {
+                    stopRecording();
+                } else {
+                    startRecording();
+                }
+            };
+
+            micButton.addEventListener('click', toggleListening);
+            // --- FIN DE CORRECCIÓN ---
 
             const toggleBtn = document.getElementById('toggle-dictionary');
             const dictContent = document.getElementById('dictionary-content');
@@ -343,7 +343,7 @@
             const voiceInput = document.getElementById('voice-command');
             const outputInput = document.getElementById('text-output');
             const customList = document.getElementById('custom-commands-list');
-            const defaultList = document.getElementById('default-commands-list'); // <-- MEJORA 3
+            const defaultList = document.getElementById('default-commands-list');
             
             toggleBtn.addEventListener('click', () => dictContent.classList.toggle('hidden'));
             
@@ -372,30 +372,26 @@
                 } else if (e.target.classList.contains('edit-btn')) {
                     voiceInput.value = command;
                     outputInput.value = customCommands[command];
-                    delete customCommands[command]; // Se elimina para volver a añadir al guardar
-                    saveCustomCommands(); // Se guarda el estado sin el comando a editar
-                    renderDictionary(); // Se actualiza la lista visualmente
+                    delete customCommands[command];
+                    saveCustomCommands();
+                    renderDictionary();
                     voiceInput.focus();
                 }
             });
 
-            // <-- INICIO MEJORA 3: Event listener para los checkboxes de comandos por defecto -->
             defaultList.addEventListener('change', (e) => {
                 if (e.target.type === 'checkbox') {
                     const command = e.target.dataset.command;
-                    const isEnabled = e.target.checked;
-                    if (isEnabled) {
+                    if (e.target.checked) {
                         disabledDefaultCommands.delete(command);
                     } else {
                         disabledDefaultCommands.add(command);
                     }
-                    e.target.closest('li').classList.toggle('disabled-command', !isEnabled);
+                    e.target.closest('li').classList.toggle('disabled-command', !e.target.checked);
                     saveDisabledCommands();
                 }
             });
-            // <-- FIN MEJORA 3 -->
 
-            // <-- INICIO MEJORA 4: Event listener para el botón de vaciar -->
             const clearBtn = document.getElementById('clear-custom-commands-btn');
             clearBtn.addEventListener('click', () => {
                 if (confirm('¿Estás seguro de que quieres eliminar TODOS los comandos personalizados? Esta acción no se puede deshacer.')) {
@@ -404,14 +400,12 @@
                     renderDictionary();
                 }
             });
-            // <-- FIN MEJORA 4 -->
 
             const exportBtn = document.getElementById('export-btn');
             const importBtn = document.getElementById('import-btn');
             const importFile = document.getElementById('import-file');
             const dropZone = document.getElementById('drop-zone');
 
-            // --- Lógica de importación/exportación sin cambios ---
             exportBtn.addEventListener('click', () => {
                 const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(customCommands, null, 2));
                 const downloadAnchorNode = document.createElement('a');
