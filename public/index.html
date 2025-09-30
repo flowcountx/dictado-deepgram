@@ -161,7 +161,9 @@
             let audioChunks = [];
 
             const savedPunctuationState = localStorage.getItem('punctuationEnabled') === 'true';
-            punctuationToggle.checked = savedPuncuationState;
+            // --- CORRECCIÓN CLAVE AQUÍ ---
+            punctuationToggle.checked = savedPunctuationState; // Corregido el typo "savedPuncuationState"
+            
             punctuationToggle.addEventListener('change', () => {
                 localStorage.setItem('punctuationEnabled', punctuationToggle.checked);
             });
@@ -280,7 +282,6 @@
                 editor.execCommand('mceInsertContent', false, textToInsert);
             }
             
-            // --- INICIO DE CORRECCIÓN: Lógica de grabación reestructurada ---
             const startRecording = async () => {
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -292,7 +293,11 @@
                         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                         const punctuate = punctuationToggle.checked;
                         try {
-                            const response = await fetch(`/api/transcribe?punctuate=${punctuate}`, { method: 'POST', body: audioBlob });
+                            const response = await fetch(`/api/transcribe?punctuate=${punctuate}`, { 
+                                method: 'POST', 
+                                headers: { 'Content-Type': 'audio/webm' },
+                                body: audioBlob 
+                            });
                             if (!response.ok) throw new Error(`Error del servidor: ${response.statusText}`);
                             const data = await response.json();
                             if (data.transcript) {
@@ -335,7 +340,6 @@
             };
 
             micButton.addEventListener('click', toggleListening);
-            // --- FIN DE CORRECCIÓN ---
 
             const toggleBtn = document.getElementById('toggle-dictionary');
             const dictContent = document.getElementById('dictionary-content');
