@@ -74,7 +74,8 @@
             <div class="controls-section controls-left">
                 <label class="punctuation-toggle">
                     <input type="checkbox" id="punctuation-toggle">
-                    Puntuación Automática
+                    <!-- MEJORA: Cambio de texto -->
+                    Puntuación Automática por IA
                 </label>
             </div>
             <div class="controls-section controls-center">
@@ -161,8 +162,7 @@
             let audioChunks = [];
 
             const savedPunctuationState = localStorage.getItem('punctuationEnabled') === 'true';
-            // --- CORRECCIÓN CLAVE AQUÍ ---
-            punctuationToggle.checked = savedPunctuationState; // Corregido el typo "savedPuncuationState"
+            punctuationToggle.checked = savedPunctuationState;
             
             punctuationToggle.addEventListener('change', () => {
                 localStorage.setItem('punctuationEnabled', punctuationToggle.checked);
@@ -237,6 +237,7 @@
                 if (!text) return "";
                 let processedText = text.trim();
                 
+                // 1. Reemplazar comandos de voz por su texto correspondiente
                 Object.entries(fullCommandDictionary).forEach(([command, replacement]) => {
                     const regex = new RegExp(`\\b${command}\\b`, 'gi');
                     processedText = processedText.replace(regex, replacement);
@@ -246,6 +247,12 @@
                     processedText = processedText.slice(0, -1);
                 }
 
+                // --- INICIO DE CORRECCIÓN: Capitalización después de comandos de puntuación ---
+                // 2. Capitalizar la letra que sigue a un punto, !, o ? dentro del mismo fragmento
+                processedText = processedText.replace(/(?<=[.?!]\s)\w/g, char => char.toUpperCase());
+                // --- FIN DE CORRECCIÓN ---
+
+                // 3. Capitalizar la primera letra del fragmento si es necesario (basado en lo que ya está en el editor)
                 const editor = tinymce.activeEditor;
                 const rng = editor.selection.getRng();
                 const textBefore = rng.startContainer.textContent.substring(0, rng.startOffset);
@@ -261,6 +268,7 @@
                     processedText = processedText.charAt(0).toLowerCase() + processedText.slice(1);
                 }
                 
+                // 4. Limpieza final de espacios antes de signos de puntuación
                 processedText = processedText.replace(/\s+([.,:;!?\)])/g, '$1');
                 
                 return processedText;
